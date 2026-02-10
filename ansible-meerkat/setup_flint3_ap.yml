@@ -1,9 +1,61 @@
-- name: Configure Flint 3 Access Point (WiFi Bridging)
+---
+- name: Configure Flint 3 Access Point (AP baseline)
   hosts: access_points
-  user: root
-  gather_facts: no
+  become: false
+  gather_facts: false
+
   vars_files:
     - group_vars/all/vault.yml
 
+  vars:
+    ap_ip: "10.1.0.4"
+    ap_netmask: "255.255.255.0"
+    ap_gateway: "10.1.0.1"
+
   tasks:
-    ... (truncated tasks as provided)
+    - name: Set AP hostname
+      community.openwrt.uci:
+        command: set
+        key: system.@system[0].hostname
+        value: flint3
+
+    - name: Set AP LAN static IP
+      community.openwrt.uci:
+        command: set
+        key: network.lan.ipaddr
+        value: "{{ ap_ip }}"
+
+    - name: Set AP netmask
+      community.openwrt.uci:
+        command: set
+        key: network.lan.netmask
+        value: "{{ ap_netmask }}"
+
+    - name: Set AP gateway
+      community.openwrt.uci:
+        command: set
+        key: network.lan.gateway
+        value: "{{ ap_gateway }}"
+
+    - name: Set AP DNS to gateway
+      community.openwrt.uci:
+        command: set
+        key: network.lan.dns
+        value: "{{ ap_gateway }}"
+
+    - name: Disable DHCP server on AP LAN
+      community.openwrt.uci:
+        command: set
+        key: dhcp.lan.ignore
+        value: "1"
+
+    - name: Commit UCI changes
+      ansible.builtin.raw: |
+        uci commit system
+        uci commit network
+        uci commit dhcp
+
+    - name: Reload OpenWrt services
+      ansible.builtin.raw: |
+        /etc/init.d/network reload
+        /etc/init.d/dnsmasq restart

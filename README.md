@@ -7,6 +7,86 @@
 
 ---
 
+## 0. Factory-Reset to Ansible (GL.iNet + `community.openwrt`)
+
+This section is the **direct path** from a factory-reset GL.iNet router to a working Ansible run using the official OpenWrt collection:
+
+- Collection: <https://galaxy.ansible.com/ui/repo/published/community/openwrt/>
+- Playbooks in this repo: `ansible-meerkat/setup_flint2.yml` and `ansible-meerkat/setup_flint3_ap.yml`
+
+### 0.1 Preconditions
+
+- You have a laptop/workstation with Python 3.10+.
+- You can connect by Ethernet to each router during setup.
+- You can factory reset both devices (Flint 2 and Flint 3).
+
+### 0.2 Factory reset each GL.iNet device
+
+Do this **one device at a time**:
+
+1. Power on router.
+2. Hold **RESET** for ~10 seconds until LEDs indicate reset/reboot.
+3. Wait until router is fully booted.
+4. Connect your computer to LAN.
+5. Browse to `http://192.168.8.1` and set the admin password.
+6. Enable SSH in GL.iNet admin if needed and verify:
+   ```bash
+   ssh root@192.168.8.1
+   ```
+
+> Both routers factory-reset to `192.168.8.1`, so configure Flint 2 first, then disconnect it before doing Flint 3.
+
+### 0.3 Install Ansible and the OpenWrt collection
+
+On your control machine:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+pip install "ansible-core>=2.16"
+ansible-galaxy collection install -r ansible-meerkat/requirements.yml
+```
+
+### 0.4 Configure Flint 2 (gateway) from factory defaults
+
+1. Connect only to Flint 2 at `192.168.8.1`.
+2. Check SSH connectivity:
+   ```bash
+   ansible -i ansible-meerkat/inventory.ini gateway -m ping -k
+   ```
+3. Run playbook:
+   ```bash
+   ansible-playbook -i ansible-meerkat/inventory.ini ansible-meerkat/setup_flint2.yml -k
+   ```
+4. Reconnect your workstation so it can reach the new router IP (`10.1.0.1`).
+
+### 0.5 Configure Flint 3 (AP) from factory defaults
+
+1. Disconnect Flint 2 from your setup network (avoid IP conflict).
+2. Factory reset Flint 3 and connect to it at `192.168.8.1`.
+3. Check SSH connectivity:
+   ```bash
+   ansible -i ansible-meerkat/inventory.ini access_points -m ping -k
+   ```
+4. Run playbook:
+   ```bash
+   ansible-playbook -i ansible-meerkat/inventory.ini ansible-meerkat/setup_flint3_ap.yml -k
+   ```
+5. After playbook, AP should be reachable at `10.1.0.4`.
+
+### 0.6 Recommended post-checks
+
+```bash
+ssh root@10.1.0.1 "uci show network.lan"
+ssh root@10.1.0.4 "uci show network.lan"
+ssh root@10.1.0.4 "uci show dhcp.lan"
+```
+
+If desired, replace `-k` with SSH keys once initial provisioning is complete.
+
+---
+
 ## 1. Network Topology
 
 ### **Zone A: Garage (Core & MDF)**
