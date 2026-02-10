@@ -1,0 +1,9 @@
+- name: Configure Flint 3 Access Point (WiFi Bridging)
+  hosts: access_points
+  user: root
+  gather_facts: no
+  vars_files:
+    - group_vars/all/vault.yml
+
+  tasks:
+    ... (truncated tasks as provided)

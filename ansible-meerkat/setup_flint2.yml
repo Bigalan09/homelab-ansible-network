@@ -1,0 +1,9 @@
+- name: Configure Flint 2 Gateway (Core Routing & Firewall)
+  hosts: gateway
+  user: root
+  gather_facts: no
+  vars_files:
+    - group_vars/all/vault.yml
+
+  tasks:
+    ... (truncated tasks as provided)
