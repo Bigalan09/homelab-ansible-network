@@ -12,40 +12,83 @@
     lan_netmask: "255.255.255.0"
 
   tasks:
-    - name: Set router hostname
-      community.openwrt.uci:
-        command: set
-        key: system.@system[0].hostname
-        value: flint2
+    - name: Set router hostname and timezone
+      ansible.builtin.raw: |
+        uci set system.@system[0].hostname='flint2'
+        uci set system.@system[0].zonename='Europe/London'
+        uci set system.@system[0].timezone='GMT0BST,M3.5.0/1,M10.5.0'
 
-    - name: Set timezone name
-      community.openwrt.uci:
-        command: set
-        key: system.@system[0].zonename
-        value: Europe/London
+    - name: Set LAN management interface
+      ansible.builtin.raw: |
+        uci set network.lan.ipaddr='{{ lan_ip }}'
+        uci set network.lan.netmask='{{ lan_netmask }}'
 
-    - name: Set timezone offset
-      community.openwrt.uci:
-        command: set
-        key: system.@system[0].timezone
-        value: GMT0BST,M3.5.0/1,M10.5.0
+    - name: Ensure VLAN interfaces exist
+      ansible.builtin.raw: |
+        {% for vlan in vlans %}
+        uci -q delete network.vlan{{ vlan.id }}
+        uci set network.vlan{{ vlan.id }}='interface'
+        uci set network.vlan{{ vlan.id }}.proto='static'
+        uci set network.vlan{{ vlan.id }}.device='br-lan.{{ vlan.id }}'
+        uci set network.vlan{{ vlan.id }}.ipaddr='{{ vlan.ip }}'
+        uci set network.vlan{{ vlan.id }}.netmask='255.255.255.0'
+        {% endfor %}
 
-    - name: Set LAN static IP
-      community.openwrt.uci:
-        command: set
-        key: network.lan.ipaddr
-        value: "{{ lan_ip }}"
+    - name: Ensure DHCP pools exist for routed VLANs
+      ansible.builtin.raw: |
+        {% for vlan in vlans %}
+        uci -q delete dhcp.vlan{{ vlan.id }}
+        uci set dhcp.vlan{{ vlan.id }}='dhcp'
+        uci set dhcp.vlan{{ vlan.id }}.interface='vlan{{ vlan.id }}'
+        uci set dhcp.vlan{{ vlan.id }}.start='100'
+        uci set dhcp.vlan{{ vlan.id }}.limit='150'
+        uci set dhcp.vlan{{ vlan.id }}.leasetime='12h'
+        {% endfor %}
 
-    - name: Set LAN netmask
-      community.openwrt.uci:
-        command: set
-        key: network.lan.netmask
-        value: "{{ lan_netmask }}"
+    - name: Configure firewall zones for VLANs
+      ansible.builtin.raw: |
+        {% for vlan in vlans %}
+        uci -q delete firewall.{{ vlan.zone }}
+        uci set firewall.{{ vlan.zone }}='zone'
+        uci set firewall.{{ vlan.zone }}.name='{{ vlan.zone }}'
+        uci set firewall.{{ vlan.zone }}.network='vlan{{ vlan.id }}'
+        uci set firewall.{{ vlan.zone }}.input='{{ 'ACCEPT' if vlan.name in ['servers', 'trusted'] else 'REJECT' }}'
+        uci set firewall.{{ vlan.zone }}.output='ACCEPT'
+        uci set firewall.{{ vlan.zone }}.forward='{{ 'ACCEPT' if vlan.name == 'servers' else 'REJECT' }}'
+        {% endfor %}
+
+    - name: Configure inter-zone forwarding rules from vars
+      ansible.builtin.raw: |
+        idx=0
+        while uci -q get firewall.forwarding[$idx] >/dev/null 2>&1; do
+          uci -q delete firewall.forwarding[$idx]
+        done
+        {% for rule in forwarding_rules %}
+        uci add firewall forwarding >/dev/null
+        uci set firewall.@forwarding[-1].src='{{ rule.src }}'
+        uci set firewall.@forwarding[-1].dest='{{ rule.dest }}'
+        {% endfor %}
+
+    - name: Add trusted to servers limited management rule
+      ansible.builtin.raw: |
+        uci -q delete firewall.trusted_to_servers_mgmt
+        uci set firewall.trusted_to_servers_mgmt='rule'
+        uci set firewall.trusted_to_servers_mgmt.name='Trusted to Servers Web and SSH'
+        uci set firewall.trusted_to_servers_mgmt.src='trusted_zone'
+        uci set firewall.trusted_to_servers_mgmt.dest='server_zone'
+        uci set firewall.trusted_to_servers_mgmt.proto='tcp'
+        uci set firewall.trusted_to_servers_mgmt.dest_port='22 80 443'
+        uci set firewall.trusted_to_servers_mgmt.target='ACCEPT'
 
     - name: Commit UCI changes
       ansible.builtin.raw: |
         uci commit system
         uci commit network
+        uci commit dhcp
+        uci commit firewall
 
-    - name: Reload OpenWrt configuration
-      ansible.builtin.raw: /etc/init.d/network reload
+    - name: Reload OpenWrt services
+      ansible.builtin.raw: |
+        /etc/init.d/network reload
+        /etc/init.d/dnsmasq restart
+        /etc/init.d/firewall restart
