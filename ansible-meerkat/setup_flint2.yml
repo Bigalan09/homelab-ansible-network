@@ -1,9 +1,51 @@
-- name: Configure Flint 2 Gateway (Core Routing & Firewall)
+---
+- name: Configure Flint 2 Gateway (Core routing baseline)
   hosts: gateway
-  user: root
-  gather_facts: no
+  become: false
+  gather_facts: false
+
   vars_files:
     - group_vars/all/vault.yml
 
+  vars:
+    lan_ip: "10.1.0.1"
+    lan_netmask: "255.255.255.0"
+
   tasks:
-    ... (truncated tasks as provided)
+    - name: Set router hostname
+      community.openwrt.uci:
+        command: set
+        key: system.@system[0].hostname
+        value: flint2
+
+    - name: Set timezone name
+      community.openwrt.uci:
+        command: set
+        key: system.@system[0].zonename
+        value: Europe/London
+
+    - name: Set timezone offset
+      community.openwrt.uci:
+        command: set
+        key: system.@system[0].timezone
+        value: GMT0BST,M3.5.0/1,M10.5.0
+
+    - name: Set LAN static IP
+      community.openwrt.uci:
+        command: set
+        key: network.lan.ipaddr
+        value: "{{ lan_ip }}"
+
+    - name: Set LAN netmask
+      community.openwrt.uci:
+        command: set
+        key: network.lan.netmask
+        value: "{{ lan_netmask }}"
+
+    - name: Commit UCI changes
+      ansible.builtin.raw: |
+        uci commit system
+        uci commit network
+
+    - name: Reload OpenWrt configuration
+      ansible.builtin.raw: /etc/init.d/network reload
