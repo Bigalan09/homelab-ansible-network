@@ -11,12 +11,14 @@ This repository now codifies the README network intent directly in Ansible tasks
 
 - Router Garage gateway baseline now includes:
   - management IP (`10.1.0.1/24`),
+  - WAN configured for PPPoE using Vault-provided credentials,
   - routed VLAN interfaces (`10`, `20`, `30`, `99`) on `br-lan.<vlan>`,
   - DHCP scopes for each routed VLAN,
   - firewall zones and forwarding rules,
   - specific trusted-to-servers management rule for TCP `22/80/443`.
   - garage Wi-Fi SSID relabeled to `homelab_garage_mngmt` before radio shutdown,
   - 2.4/5 GHz radios disabled after VLAN/firewall policy is staged.
+  - best-effort Tailscale provisioning (install/start + advertise exit node and subnet routes).
 
 - Router Office AP baseline now includes:
   - AP management IP (`10.1.0.4`), gateway and DNS (`10.1.0.1`),

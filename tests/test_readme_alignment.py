@@ -66,6 +66,21 @@ class TestReadmeAlignment(unittest.TestCase):
         self.assertIn("ansible.builtin.wait_for", ROUTER_GARAGE)
         self.assertIn("failed_when: false", ROUTER_GARAGE)
 
+    def test_garage_tailscale_exit_node_policy(self):
+        self.assertIn("tailscale_enable: true", NETWORK_VARS)
+        self.assertIn("tailscale_advertise_routes:", NETWORK_VARS)
+        self.assertIn("opkg update && opkg install kmod-tun tailscale", ROUTER_GARAGE)
+        self.assertIn("--advertise-exit-node", ROUTER_GARAGE)
+        self.assertIn("--advertise-routes='{{ tailscale_advertise_routes_csv }}'", ROUTER_GARAGE)
+
+    def test_garage_wan_pppoe_policy(self):
+        self.assertIn("garage_wan_proto: 'pppoe'", NETWORK_VARS)
+        self.assertIn("vault_garage_wan_pppoe_username", README)
+        self.assertIn("vault_garage_wan_pppoe_password", README)
+        self.assertIn("uci set network.wan.proto='pppoe'", ROUTER_GARAGE)
+        self.assertIn("uci set network.wan.username='{{ garage_wan_pppoe_username_effective }}'", ROUTER_GARAGE)
+        self.assertIn("uci set network.wan.password='{{ garage_wan_pppoe_password_effective }}'", ROUTER_GARAGE)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -52,6 +52,9 @@ ansible-galaxy collection install -r ansible-meerkat/requirements.yml
 
 - Non-secrets are in `ansible-meerkat/group_vars/all/network.yml`.
 - Secrets are in `ansible-meerkat/group_vars/all/vault.yml` (encrypt this file).
+- Add WAN PPPoE secrets in Vault:
+  - `vault_garage_wan_pppoe_username`
+  - `vault_garage_wan_pppoe_password`
 
 ```bash
 ansible-vault encrypt ansible-meerkat/group_vars/all/vault.yml
@@ -90,7 +93,7 @@ or
    ```bash
    ansible-playbook -i ansible-meerkat/inventory.ini ansible-meerkat/setup_router_garage.yml -k --ask-vault-pass -e ansible_host=192.168.8.1
    ```
-4. The playbook renames garage SSIDs to `homelab_garage_mngmt` and then disables 2.4/5 GHz radios after VLAN/firewall configuration.
+4. The playbook configures garage WAN as PPPoE (using vault credentials), renames garage SSIDs to `homelab_garage_mngmt`, disables 2.4/5 GHz radios after VLAN/firewall configuration, and attempts to configure Tailscale as an exit node.
 5. Reconnect your workstation so it can reach the new router IP (`10.1.0.1`).
 
 ### 0.5 Configure Router Office (AP) from factory defaults
@@ -185,6 +188,9 @@ If desired, replace `-k` with SSH keys once initial provisioning is complete.
     * Create `Interface_Trusted` -> Protocol: Static -> IP: `10.20.0.1` -> Device: `br-lan.20`.
     * Create `Interface_IoT` -> Protocol: Static -> IP: `10.30.0.1` -> Device: `br-lan.30`.
     * *Enable DHCP Server for all.*
+3.  **WAN:**
+    * Protocol: **PPPoE**.
+    * Credentials: sourced from Ansible Vault (`vault_garage_wan_pppoe_username` / `vault_garage_wan_pppoe_password`).
 
 ### **Firewall Zones**
 | Zone Name | Input | Output | Forward | Masquerading | Allowed Forward To |
@@ -249,5 +255,6 @@ If desired, replace `-k` with SSH keys once initial provisioning is complete.
     * `ha.meerkat.lan` -> `10.30.0.50:8123` (Home Assistant)
 
 ### **VPN: Tailscale**
-* **Exit Node:** Enabled on Router Garage.
-* **Subnet Routes:** Advertise `10.10.0.0/24` and `10.20.0.0/24`.
+* **Exit Node:** Garage playbook runs `tailscale up --advertise-exit-node`.
+* **Subnet Routes:** Garage playbook advertises `10.10.0.0/24` and `10.20.0.0/24`.
+* **Auth:** If the node is not already authenticated, set `tailscale_auth_key` in Vault (or run `tailscale up` manually once on the router).
