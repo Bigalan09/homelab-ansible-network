@@ -1,0 +1,37 @@
+---
+# Default variables for the router_garage role.
+lan_ip: "10.1.0.1"
+lan_netmask: "255.255.255.0"
+garage_mgmt_ssid_default: "homelab_garage_mngmt"
+garage_wifi_radios_to_disable_default:
+  - radio0
+  - radio1
+garage_test_mode_default: false
+garage_test_repeater_network_default: "wwan"
+garage_test_repeater_radio_default: "radio1"
+garage_test_repeater_encryption_default: "sae"
+garage_test_repeater_radios_default:
+  - "radio1"
+  - "radio0"
+  - "radio2"
+garage_test_repeater_encryptions_default:
+  - "sae"
+  - "sae-mixed"
+  - "psk2"
+  - "psk-mixed"
+garage_test_tailscale_hosts_default:
+  - "login.tailscale.com"
+  - "api.tailscale.com"
+garage_test_uplink_wait_seconds_default: 90
+garage_test_uplink_poll_interval_seconds_default: 5
+tailscale_enable_default: true
+tailscale_advertise_routes_default:
+  - "10.10.0.0/24"
+  - "10.20.0.0/24"
+tailscale_oauth_tailnet_default: "-"
+tailscale_oauth_tags_default:
+  - "tag:router-garage"
+tailscale_oauth_key_expiry_seconds_default: 7776000
+garage_wan_proto_default: "pppoe"
+garage_wan_pppoe_mtu_default: "1492"
+garage_wan_vlan_tag_default: "911"

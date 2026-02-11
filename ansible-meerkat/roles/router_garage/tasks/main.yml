@@ -1,0 +1,15 @@
+---
+- name: Apply garage policy and validation tasks
+  ansible.builtin.import_tasks: policy_and_validation.yml
+
+- name: Apply garage core network tasks
+  ansible.builtin.import_tasks: core_network.yml
+
+- name: Apply garage test-mode verification tasks
+  ansible.builtin.import_tasks: test_mode_checks.yml
+
+- name: Apply garage tailscale tasks
+  ansible.builtin.import_tasks: tailscale.yml
+
+- name: Apply garage radio policy tasks
+  ansible.builtin.import_tasks: radio_policy.yml

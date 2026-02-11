@@ -1,0 +1,5 @@
+---
+# Default variables for the router_office_ap role.
+ap_ip: "10.1.0.4"
+ap_netmask: "255.255.255.0"
+ap_gateway: "10.1.0.1"
