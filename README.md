@@ -55,6 +55,12 @@ ansible-galaxy collection install -r ansible-meerkat/requirements.yml
 - Add WAN PPPoE secrets in Vault:
   - `vault_garage_wan_pppoe_username`
   - `vault_garage_wan_pppoe_password`
+- Add optional test-mode repeater secrets in Vault:
+  - `vault_garage_test_repeater_ssid`
+  - `vault_garage_test_repeater_password`
+- Add Tailscale OAuth secrets in Vault (if using OAuth instead of a static auth key):
+  - `vault_tailscale_oauth_client_id`
+  - `vault_tailscale_oauth_client_secret`
 - Set garage WAN VLAN tag in `network.yml` (default in repo: `garage_wan_vlan_tag: '911'`).
 
 ```bash
@@ -68,6 +74,16 @@ ansible-vault view ansible-meerkat/group_vars/all/vault.yml
 ansible-vault decrypt ansible-meerkat/group_vars/all/vault.yml
 ansible-vault encrypt ansible-meerkat/group_vars/all/vault.yml
 ```
+
+OAuth notes:
+- OAuth client must include permission to create auth keys.
+- OAuth tags should allow `tag:router-garage` (configurable via `tailscale_oauth_tags`).
+
+Test mode notes:
+- Set `garage_test_mode: true` in `ansible-meerkat/group_vars/all/network.yml`.
+- In test mode, the router joins your upstream Wi-Fi as repeater uplink (`wwan`) and keeps Wi-Fi radios enabled so internet remains available for Tailscale.
+- In test mode, the playbook also pings `login.tailscale.com` and `api.tailscale.com` from the router; if those fail, the run fails fast.
+- In live/prod mode (`garage_test_mode: false`), radios can be disabled after WAN/internet checks pass.
 
 ```bash
 ansible-vault encrypt ansible-meerkat/group_vars/all/vault.yml
@@ -106,7 +122,9 @@ or
    ```bash
    ansible-playbook -i ansible-meerkat/inventory.ini ansible-meerkat/setup_router_garage.yml -k --ask-vault-pass -e ansible_host=192.168.8.1
    ```
-4. The playbook configures garage WAN as PPPoE on VLAN `911` (using vault credentials), renames garage SSIDs to `homelab_garage_mngmt`, disables 2.4/5 GHz radios after VLAN/firewall configuration, and attempts to configure Tailscale as an exit node.
+4. The playbook configures garage WAN as PPPoE on VLAN `911` (using vault credentials), renames garage SSIDs to `homelab_garage_mngmt`, and attempts to configure Tailscale as an exit node.
+   - Live/prod mode: disables 2.4/5 GHz radios only after WAN + internet are confirmed up.
+   - Test mode (`garage_test_mode: true`): configures Wi-Fi repeater uplink and keeps radios enabled.
 5. Reconnect your workstation so it can reach the new router IP (`10.1.0.1`).
 
 ### 0.5 Configure Router Office (AP) from factory defaults

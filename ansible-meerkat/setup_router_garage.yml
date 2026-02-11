@@ -15,10 +15,21 @@
     garage_wifi_radios_to_disable_default:
       - radio0
       - radio1
+    garage_test_mode_default: false
+    garage_test_repeater_network_default: "wwan"
+    garage_test_repeater_radio_default: "radio0"
+    garage_test_repeater_encryption_default: "psk2"
+    garage_test_tailscale_hosts_default:
+      - "login.tailscale.com"
+      - "api.tailscale.com"
     tailscale_enable_default: true
     tailscale_advertise_routes_default:
       - "10.10.0.0/24"
       - "10.20.0.0/24"
+    tailscale_oauth_tailnet_default: "-"
+    tailscale_oauth_tags_default:
+      - "tag:router-garage"
+    tailscale_oauth_key_expiry_seconds_default: 7776000
     garage_wan_proto_default: "pppoe"
     garage_wan_pppoe_mtu_default: "1492"
     garage_wan_vlan_tag_default: "911"
@@ -28,10 +39,23 @@
       ansible.builtin.set_fact:
         garage_mgmt_ssid_effective: "{{ garage_mgmt_ssid | default(garage_mgmt_ssid_default) }}"
         garage_wifi_radios_to_disable_effective: "{{ garage_wifi_radios_to_disable | default(garage_wifi_radios_to_disable_default) }}"
+        garage_test_mode_effective: "{{ garage_test_mode | default(garage_test_mode_default) }}"
+        garage_test_repeater_network_effective: "{{ garage_test_repeater_network | default(garage_test_repeater_network_default) }}"
+        garage_test_repeater_radio_effective: "{{ garage_test_repeater_radio | default(garage_test_repeater_radio_default) }}"
+        garage_test_repeater_encryption_effective: "{{ garage_test_repeater_encryption | default(garage_test_repeater_encryption_default) }}"
+        garage_test_tailscale_hosts_effective: "{{ garage_test_tailscale_hosts | default(garage_test_tailscale_hosts_default) }}"
+        garage_test_repeater_ssid_effective: "{{ garage_test_repeater_ssid | default(vault_garage_test_repeater_ssid | default('')) }}"
+        garage_test_repeater_password_effective: "{{ garage_test_repeater_password | default(vault_garage_test_repeater_password | default('')) }}"
         tailscale_enable_effective: "{{ tailscale_enable | default(tailscale_enable_default) }}"
         tailscale_advertise_routes_effective: "{{ tailscale_advertise_routes | default(tailscale_advertise_routes_default) }}"
         tailscale_advertise_routes_csv: "{{ (tailscale_advertise_routes | default(tailscale_advertise_routes_default)) | join(',') }}"
         tailscale_auth_key_effective: "{{ tailscale_auth_key | default('') }}"
+        tailscale_oauth_client_id_effective: "{{ tailscale_oauth_client_id | default(vault_tailscale_oauth_client_id | default('')) }}"
+        tailscale_oauth_client_secret_effective: "{{ tailscale_oauth_client_secret | default(vault_tailscale_oauth_client_secret | default('')) }}"
+        tailscale_oauth_tailnet_effective: "{{ tailscale_oauth_tailnet | default(tailscale_oauth_tailnet_default) }}"
+        tailscale_oauth_tags_effective: "{{ tailscale_oauth_tags | default(tailscale_oauth_tags_default) }}"
+        tailscale_oauth_key_expiry_seconds_effective: "{{ tailscale_oauth_key_expiry_seconds | default(tailscale_oauth_key_expiry_seconds_default) }}"
+        tailscale_generated_auth_key_effective: ""
         garage_wan_proto_effective: "{{ garage_wan_proto | default(garage_wan_proto_default) }}"
         garage_wan_pppoe_mtu_effective: "{{ garage_wan_pppoe_mtu | default(garage_wan_pppoe_mtu_default) }}"
         garage_wan_vlan_tag_effective: "{{ garage_wan_vlan_tag | default(garage_wan_vlan_tag_default) }}"
@@ -52,6 +76,17 @@
           vault_garage_wan_pppoe_password in group_vars/all/vault.yml,
           and set garage_wan_vlan_tag (e.g. 911) in network.yml.
       when: garage_wan_proto_effective == "pppoe"
+
+    - name: Validate test-mode repeater credentials are available
+      ansible.builtin.assert:
+        that:
+          - garage_test_repeater_ssid_effective | length > 0
+          - garage_test_repeater_password_effective | length > 0
+        fail_msg: >-
+          garage_test_mode is enabled but repeater credentials are missing.
+          Set vault_garage_test_repeater_ssid and
+          vault_garage_test_repeater_password in group_vars/all/vault.yml.
+      when: garage_test_mode_effective | bool
 
     - name: Set router hostname and timezone
       ansible.builtin.raw: |
@@ -108,6 +143,36 @@
         uci set network.wan.service='{{ garage_wan_pppoe_service_effective }}'
         {% endif %}
       when: garage_wan_proto_effective == "pppoe"
+      no_log: true
+
+    - name: Configure test-mode repeater uplink (Wi-Fi WAN)
+      ansible.builtin.raw: |
+        uci -q delete network.{{ garage_test_repeater_network_effective }}
+        uci set network.{{ garage_test_repeater_network_effective }}='interface'
+        uci set network.{{ garage_test_repeater_network_effective }}.proto='dhcp'
+        uci set network.{{ garage_test_repeater_network_effective }}.peerdns='1'
+        uci set network.{{ garage_test_repeater_network_effective }}.metric='10'
+
+        uci set wireless.{{ garage_test_repeater_radio_effective }}.disabled='0'
+        uci -q delete wireless.repeater_uplink
+        uci set wireless.repeater_uplink='wifi-iface'
+        uci set wireless.repeater_uplink.device='{{ garage_test_repeater_radio_effective }}'
+        uci set wireless.repeater_uplink.mode='sta'
+        uci set wireless.repeater_uplink.network='{{ garage_test_repeater_network_effective }}'
+        uci set wireless.repeater_uplink.ssid='{{ garage_test_repeater_ssid_effective }}'
+        uci set wireless.repeater_uplink.encryption='{{ garage_test_repeater_encryption_effective }}'
+        uci set wireless.repeater_uplink.key='{{ garage_test_repeater_password_effective }}'
+
+        idx=0
+        while uci -q get firewall.@zone[$idx] >/dev/null 2>&1; do
+          if [ "$(uci -q get firewall.@zone[$idx].name)" = "wan" ]; then
+            uci -q del_list firewall.@zone[$idx].network='{{ garage_test_repeater_network_effective }}'
+            uci add_list firewall.@zone[$idx].network='{{ garage_test_repeater_network_effective }}'
+            break
+          fi
+          idx=$((idx+1))
+        done
+      when: garage_test_mode_effective | bool
       no_log: true
 
     - name: Ensure VLAN interfaces exist
@@ -167,15 +232,7 @@
         uci set firewall.trusted_to_servers_mgmt.dest_port='22 80 443'
         uci set firewall.trusted_to_servers_mgmt.target='ACCEPT'
 
-    - name: Disable garage 2.4/5 GHz radios after VLAN and firewall setup
-      ansible.builtin.raw: |
-        {% for radio in garage_wifi_radios_to_disable_effective %}
-        if uci -q get wireless.{{ radio }} >/dev/null 2>&1; then
-          uci set wireless.{{ radio }}.disabled='1'
-        fi
-        {% endfor %}
-
-    - name: Commit UCI changes
+    - name: Commit core UCI changes
       ansible.builtin.raw: |
         uci commit system
         uci commit network
@@ -210,6 +267,27 @@
           If your control host route changed during reload, reconnect using
           ssh root@{{ lan_ip }} and rerun with -e ansible_host=192.168.8.1 for
           future factory-reset bootstrap runs.
+
+    - name: "Test-mode check: verify repeater uplink reaches tailscale hosts"
+      ansible.builtin.raw: |
+        failed=0
+        {% for host in garage_test_tailscale_hosts_effective %}
+        ping -c1 -W3 {{ host }} >/dev/null 2>&1 || failed=1
+        {% endfor %}
+        exit $failed
+      register: garage_test_tailscale_ping
+      changed_when: false
+      failed_when: garage_test_tailscale_ping.rc != 0
+      when: garage_test_mode_effective | bool
+
+    - name: Test-mode check passed for tailscale host reachability
+      ansible.builtin.debug:
+        msg: >-
+          Test mode uplink can reach tailscale hosts:
+          {{ garage_test_tailscale_hosts_effective | join(', ') }}
+      when:
+        - garage_test_mode_effective | bool
+        - garage_test_tailscale_ping.rc == 0
 
     - name: Ensure tailscale packages are installed (best effort)
       ansible.builtin.raw: |
@@ -264,15 +342,185 @@
       failed_when: false
       no_log: true
 
+    - name: Request tailscale OAuth access token (best effort)
+      ansible.builtin.uri:
+        url: "https://api.tailscale.com/api/v2/oauth/token"
+        method: POST
+        force_basic_auth: true
+        url_username: "{{ tailscale_oauth_client_id_effective }}"
+        url_password: "{{ tailscale_oauth_client_secret_effective }}"
+        body_format: form-urlencoded
+        body:
+          grant_type: "client_credentials"
+        return_content: true
+        status_code: 200
+      delegate_to: localhost
+      become: false
+      register: tailscale_oauth_token_result
+      failed_when: false
+      no_log: true
+      when:
+        - tailscale_enable_effective | bool
+        - tailscale_up_result is defined
+        - tailscale_up_result.rc != 0
+        - tailscale_auth_key_effective | length == 0
+        - tailscale_oauth_client_id_effective | length > 0
+        - tailscale_oauth_client_secret_effective | length > 0
+
+    - name: Create tailscale auth key from OAuth credentials (best effort)
+      ansible.builtin.uri:
+        url: "https://api.tailscale.com/api/v2/tailnet/{{ tailscale_oauth_tailnet_effective }}/keys"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ tailscale_oauth_token_result.json.access_token }}"
+          Content-Type: "application/json"
+        body_format: raw
+        body: |
+          {
+            "capabilities": {
+              "devices": {
+                "create": {
+                  "reusable": true,
+                  "ephemeral": false,
+                  "preauthorized": true,
+                  "tags": {{ tailscale_oauth_tags_effective | to_json }}
+                }
+              }
+            },
+            "expirySeconds": {{ tailscale_oauth_key_expiry_seconds_effective | int }},
+            "description": "ansible-router-garage-bootstrap"
+          }
+        return_content: true
+        status_code:
+          - 200
+          - 201
+      delegate_to: localhost
+      become: false
+      register: tailscale_oauth_key_result
+      failed_when: false
+      no_log: true
+      when:
+        - tailscale_enable_effective | bool
+        - tailscale_oauth_token_result is defined
+        - tailscale_oauth_token_result.status | default(0) == 200
+        - tailscale_oauth_token_result.json.access_token is defined
+
+    - name: Store generated tailscale auth key
+      ansible.builtin.set_fact:
+        tailscale_generated_auth_key_effective: "{{ tailscale_oauth_key_result.json.key | default('') }}"
+      no_log: true
+      when:
+        - tailscale_oauth_key_result is defined
+        - tailscale_oauth_key_result.status | default(0) in [200, 201]
+        - tailscale_oauth_key_result.json.key is defined
+
+    - name: Show tailscale OAuth key creation diagnostics (best effort)
+      ansible.builtin.debug:
+        msg: >-
+          Tailscale OAuth key creation did not return a usable key.
+          status={{ tailscale_oauth_key_result.status | default('unknown') }}
+          response={{ tailscale_oauth_key_result.json | default(tailscale_oauth_key_result.content | default('no body')) }}
+      when:
+        - tailscale_enable_effective | bool
+        - tailscale_up_result is defined
+        - tailscale_up_result.rc != 0
+        - tailscale_auth_key_effective | length == 0
+        - tailscale_oauth_key_result is defined
+        - tailscale_generated_auth_key_effective | length == 0
+
+    - name: Configure tailscale with generated OAuth auth key (best effort)
+      ansible.builtin.raw: |
+        if command -v tailscale >/dev/null 2>&1; then
+          tailscale up \
+            --auth-key='{{ tailscale_generated_auth_key_effective }}' \
+            --hostname='router-garage' \
+            --advertise-exit-node \
+            --advertise-routes='{{ tailscale_advertise_routes_csv }}' \
+            --accept-routes=true \
+            --accept-dns=false
+        fi
+      when:
+        - tailscale_enable_effective | bool
+        - tailscale_up_result is defined
+        - tailscale_up_result.rc != 0
+        - tailscale_auth_key_effective | length == 0
+        - tailscale_generated_auth_key_effective | length > 0
+      register: tailscale_up_oauth_key_result
+      failed_when: false
+      no_log: true
+
     - name: Show tailscale auth hint when not yet connected
       ansible.builtin.debug:
         msg: >-
           Tailscale is enabled but still needs authentication.
-          Provide tailscale_auth_key in Vault, or run on router:
+          Provide tailscale_auth_key in Vault, or provide
+          vault_tailscale_oauth_client_id and
+          vault_tailscale_oauth_client_secret in Vault, or run on router:
           tailscale up --hostname=router-garage --advertise-exit-node
           --advertise-routes='{{ tailscale_advertise_routes_csv }}'
       when:
         - tailscale_enable_effective | bool
         - tailscale_up_result is defined
         - tailscale_up_result.rc != 0
-        - tailscale_auth_key_effective | length == 0 or (tailscale_up_authkey_result is defined and tailscale_up_authkey_result.rc != 0)
+        - (tailscale_up_authkey_result.rc | default(1)) != 0
+        - tailscale_generated_auth_key_effective | length == 0 or (tailscale_up_oauth_key_result.rc | default(1)) != 0
+
+    - name: Verify WAN and internet reachability before disabling garage Wi-Fi
+      ansible.builtin.raw: |
+        if [ "{{ garage_test_mode_effective | ternary('true', 'false') }}" = "true" ]; then
+          uplink_up="$(ifstatus {{ garage_test_repeater_network_effective }} 2>/dev/null | jsonfilter -e '@.up' 2>/dev/null || echo false)"
+        else
+          uplink_up="$(ifstatus wan 2>/dev/null | jsonfilter -e '@.up' 2>/dev/null || echo false)"
+        fi
+        if [ "$uplink_up" != "true" ]; then
+          exit 2
+        fi
+        ping -c1 -W3 8.8.8.8 >/dev/null 2>&1 || ping -c1 -W3 1.1.1.1 >/dev/null 2>&1
+      register: garage_wan_internet_check
+      changed_when: false
+      failed_when: false
+
+    - name: Disable garage 2.4/5 GHz radios after WAN/internet confirmation
+      ansible.builtin.raw: |
+        {% for radio in garage_wifi_radios_to_disable_effective %}
+        if uci -q get wireless.{{ radio }} >/dev/null 2>&1; then
+          uci set wireless.{{ radio }}.disabled='1'
+        fi
+        {% endfor %}
+      when:
+        - not (garage_test_mode_effective | bool)
+        - garage_wan_internet_check.rc == 0
+        - garage_wifi_radios_to_disable_effective | length > 0
+
+    - name: Commit wireless radio disable changes
+      ansible.builtin.raw: |
+        uci commit wireless
+      when:
+        - not (garage_test_mode_effective | bool)
+        - garage_wan_internet_check.rc == 0
+        - garage_wifi_radios_to_disable_effective | length > 0
+
+    - name: Reload Wi-Fi after garage radio disable
+      ansible.builtin.raw: |
+        wifi reload >/dev/null 2>&1 || true
+      when:
+        - not (garage_test_mode_effective | bool)
+        - garage_wan_internet_check.rc == 0
+        - garage_wifi_radios_to_disable_effective | length > 0
+
+    - name: Skip radio disable in garage test mode
+      ansible.builtin.debug:
+        msg: >-
+          garage_test_mode is enabled; Wi-Fi radios are kept enabled so repeater
+          uplink can provide internet for Tailscale during testing.
+      when: garage_test_mode_effective | bool
+
+    - name: Keep garage Wi-Fi enabled when WAN/internet not confirmed
+      ansible.builtin.debug:
+        msg: >-
+          WAN/internet was not confirmed, so garage Wi-Fi radios were left enabled.
+          Check ifstatus wan and upstream PPPoE link, then rerun to disable radios.
+      when:
+        - not (garage_test_mode_effective | bool)
+        - garage_wan_internet_check.rc != 0
+        - garage_wifi_radios_to_disable_effective | length > 0

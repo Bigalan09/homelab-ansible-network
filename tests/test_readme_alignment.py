@@ -58,8 +58,18 @@ class TestReadmeAlignment(unittest.TestCase):
 
     def test_garage_wifi_policy_is_explicit(self):
         self.assertIn("garage_mgmt_ssid: 'homelab_garage_mngmt'", NETWORK_VARS)
+        self.assertIn("garage_test_mode:", NETWORK_VARS)
+        self.assertIn("garage_test_repeater_network: 'wwan'", NETWORK_VARS)
+        self.assertIn("garage_test_tailscale_hosts:", NETWORK_VARS)
         self.assertIn("wireless.@wifi-iface[$idx].ssid='{{ garage_mgmt_ssid_effective }}'", ROUTER_GARAGE)
+        self.assertIn("wireless.repeater_uplink='wifi-iface'", ROUTER_GARAGE)
+        self.assertIn("Test-mode check: verify repeater uplink reaches tailscale hosts", ROUTER_GARAGE)
+        self.assertIn("garage_test_tailscale_ping.rc != 0", ROUTER_GARAGE)
+        self.assertIn("garage_test_mode is enabled; Wi-Fi radios are kept enabled", ROUTER_GARAGE)
         self.assertIn("wireless.{{ radio }}.disabled='1'", ROUTER_GARAGE)
+        self.assertIn("ifstatus wan", ROUTER_GARAGE)
+        self.assertIn("ifstatus {{ garage_test_repeater_network_effective }}", ROUTER_GARAGE)
+        self.assertIn("garage_wan_internet_check.rc == 0", ROUTER_GARAGE)
 
     def test_garage_reload_handoff_is_best_effort(self):
         self.assertIn("nohup sh -c \"sleep 2; /etc/init.d/network reload; wifi reload", ROUTER_GARAGE)
@@ -69,9 +79,19 @@ class TestReadmeAlignment(unittest.TestCase):
     def test_garage_tailscale_exit_node_policy(self):
         self.assertIn("tailscale_enable: true", NETWORK_VARS)
         self.assertIn("tailscale_advertise_routes:", NETWORK_VARS)
+        self.assertIn("tailscale_oauth_tailnet: '-'", NETWORK_VARS)
+        self.assertIn("tailscale_oauth_tags:", NETWORK_VARS)
+        self.assertIn("vault_tailscale_oauth_client_id", README)
+        self.assertIn("vault_tailscale_oauth_client_secret", README)
         self.assertIn("opkg update && opkg install kmod-tun tailscale", ROUTER_GARAGE)
+        self.assertIn("https://api.tailscale.com/api/v2/oauth/token", ROUTER_GARAGE)
+        self.assertIn("https://api.tailscale.com/api/v2/tailnet/{{ tailscale_oauth_tailnet_effective }}/keys", ROUTER_GARAGE)
+        self.assertIn("- 201", ROUTER_GARAGE)
+        self.assertIn("tailscale_oauth_key_result.status | default(0) in [200, 201]", ROUTER_GARAGE)
         self.assertIn("--advertise-exit-node", ROUTER_GARAGE)
         self.assertIn("--advertise-routes='{{ tailscale_advertise_routes_csv }}'", ROUTER_GARAGE)
+        self.assertIn("(tailscale_up_authkey_result.rc | default(1)) != 0", ROUTER_GARAGE)
+        self.assertIn("(tailscale_up_oauth_key_result.rc | default(1)) != 0", ROUTER_GARAGE)
 
     def test_garage_wan_pppoe_policy(self):
         self.assertIn("garage_wan_proto: 'pppoe'", NETWORK_VARS)

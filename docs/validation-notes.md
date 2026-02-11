@@ -17,8 +17,10 @@ This repository now codifies the README network intent directly in Ansible tasks
   - firewall zones and forwarding rules,
   - specific trusted-to-servers management rule for TCP `22/80/443`.
   - garage Wi-Fi SSID relabeled to `homelab_garage_mngmt` before radio shutdown,
-  - 2.4/5 GHz radios disabled after VLAN/firewall policy is staged.
+  - live/prod mode: 2.4/5 GHz radios disabled only after WAN + internet checks pass.
+  - test mode: router can join upstream Wi-Fi repeater uplink (`wwan`), keep radios enabled, and verify reachability to tailscale hosts.
   - best-effort Tailscale provisioning (install/start + advertise exit node and subnet routes).
+  - optional Tailscale OAuth flow to mint an auth key during playbook execution.
 
 - Router Office AP baseline now includes:
   - AP management IP (`10.1.0.4`), gateway and DNS (`10.1.0.1`),
