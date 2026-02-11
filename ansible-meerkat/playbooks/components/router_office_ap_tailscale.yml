@@ -1,0 +1,17 @@
+---
+- name: Configure office router/AP tailscale profile (no exit-node broadcast)
+  hosts: access_points
+  become: false
+  gather_facts: false
+
+  vars_files:
+    - ../../group_vars/all/network.yml
+    - ../../group_vars/all/vault.yml
+
+  vars:
+    tailscale_hostname: "router-office"
+    tailscale_advertise_exit_node: false
+    tailscale_advertise_routes: []
+
+  roles:
+    - role: tailscale_openwrt

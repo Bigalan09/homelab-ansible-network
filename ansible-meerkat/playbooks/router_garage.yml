@@ -1,12 +1,3 @@
 ---
-- name: Configure garage router (gateway baseline)
-  hosts: gateway
-  become: false
-  gather_facts: false
-
-  vars_files:
-    - ../group_vars/all/network.yml
-    - ../group_vars/all/vault.yml
-
-  roles:
-    - role: router_garage
+- ansible.builtin.import_playbook: components/router_garage_core.yml
+- ansible.builtin.import_playbook: components/router_garage_tailscale.yml
