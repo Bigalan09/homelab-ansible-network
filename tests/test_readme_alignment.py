@@ -4,8 +4,24 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 README = (ROOT / "README.md").read_text(encoding="utf-8")
-ROUTER_GARAGE = (ROOT / "ansible-meerkat" / "setup_router_garage.yml").read_text(encoding="utf-8")
-ROUTER_OFFICE = (ROOT / "ansible-meerkat" / "setup_router_office_ap.yml").read_text(encoding="utf-8")
+ROUTER_GARAGE_PLAYBOOK = (ROOT / "ansible-meerkat" / "playbooks" / "router_garage.yml").read_text(encoding="utf-8")
+ROUTER_OFFICE_PLAYBOOK = (ROOT / "ansible-meerkat" / "playbooks" / "router_office_ap.yml").read_text(encoding="utf-8")
+ROUTER_GARAGE_WRAPPER = (ROOT / "ansible-meerkat" / "setup_router_garage.yml").read_text(encoding="utf-8")
+ROUTER_OFFICE_WRAPPER = (ROOT / "ansible-meerkat" / "setup_router_office_ap.yml").read_text(encoding="utf-8")
+GARAGE_DEFAULTS = (ROOT / "ansible-meerkat" / "roles" / "router_garage" / "defaults" / "main.yml").read_text(encoding="utf-8")
+OFFICE_DEFAULTS = (ROOT / "ansible-meerkat" / "roles" / "router_office_ap" / "defaults" / "main.yml").read_text(encoding="utf-8")
+GARAGE_TASKS = "\n".join(
+    (ROOT / "ansible-meerkat" / "roles" / "router_garage" / "tasks" / name).read_text(encoding="utf-8")
+    for name in [
+        "main.yml",
+        "policy_and_validation.yml",
+        "core_network.yml",
+        "test_mode_checks.yml",
+        "tailscale.yml",
+        "radio_policy.yml",
+    ]
+)
+ROUTER_OFFICE = (ROOT / "ansible-meerkat" / "roles" / "router_office_ap" / "tasks" / "main.yml").read_text(encoding="utf-8")
 NETWORK_VARS = (ROOT / "ansible-meerkat" / "group_vars" / "all" / "network.yml").read_text(encoding="utf-8")
 INVENTORY = (ROOT / "ansible-meerkat" / "inventory.ini").read_text(encoding="utf-8")
 
@@ -16,17 +32,24 @@ class TestReadmeAlignment(unittest.TestCase):
             self.assertIn(f"**{vlan_id}**", README)
             self.assertIn(subnet, README)
 
+    def test_role_based_project_structure_is_documented(self):
+        self.assertIn("Project structure (standardised role layout)", README)
+        self.assertIn("ansible-meerkat/playbooks/router_garage.yml", README)
+        self.assertIn("ansible-meerkat/playbooks/router_office_ap.yml", README)
+        self.assertIn("router_garage/", README)
+        self.assertIn("router_office_ap/", README)
+
     def test_gateway_vlan_interfaces_declared(self):
-        self.assertIn("network.vlan{{ vlan.id }}", ROUTER_GARAGE)
-        self.assertIn("br-lan.{{ vlan.id }}", ROUTER_GARAGE)
+        self.assertIn("network.vlan{{ vlan.id }}", GARAGE_TASKS)
+        self.assertIn("br-lan.{{ vlan.id }}", GARAGE_TASKS)
 
     def test_gateway_firewall_zones_and_rules(self):
-        self.assertIn("firewall.{{ vlan.zone }}", ROUTER_GARAGE)
-        self.assertIn("trusted_to_servers_mgmt", ROUTER_GARAGE)
-        self.assertIn("dest_port='22 80 443'", ROUTER_GARAGE)
+        self.assertIn("firewall.{{ vlan.zone }}", GARAGE_TASKS)
+        self.assertIn("trusted_to_servers_mgmt", GARAGE_TASKS)
+        self.assertIn("dest_port='22 80 443'", GARAGE_TASKS)
 
     def test_ap_static_address_and_dhcp_off(self):
-        self.assertIn("10.1.0.4", ROUTER_OFFICE)
+        self.assertIn("10.1.0.4", OFFICE_DEFAULTS)
         self.assertIn("dhcp.lan.ignore='1'", ROUTER_OFFICE)
 
     def test_ap_ssid_vlan_mapping_matches_readme(self):
@@ -56,6 +79,12 @@ class TestReadmeAlignment(unittest.TestCase):
         self.assertIn("router-garage", INVENTORY)
         self.assertIn("router-office", INVENTORY)
 
+    def test_playbooks_use_roles_and_wrappers_are_kept(self):
+        self.assertIn("roles:\n    - role: router_garage", ROUTER_GARAGE_PLAYBOOK)
+        self.assertIn("roles:\n    - role: router_office_ap", ROUTER_OFFICE_PLAYBOOK)
+        self.assertIn("import_playbook: playbooks/router_garage.yml", ROUTER_GARAGE_WRAPPER)
+        self.assertIn("import_playbook: playbooks/router_office_ap.yml", ROUTER_OFFICE_WRAPPER)
+
     def test_garage_wifi_policy_is_explicit(self):
         self.assertIn("garage_mgmt_ssid: 'homelab_garage_mngmt'", NETWORK_VARS)
         self.assertIn("garage_test_mode:", NETWORK_VARS)
@@ -67,34 +96,33 @@ class TestReadmeAlignment(unittest.TestCase):
         self.assertIn("garage_test_tailscale_hosts:", NETWORK_VARS)
         self.assertIn("garage_test_uplink_wait_seconds:", NETWORK_VARS)
         self.assertIn("garage_test_uplink_poll_interval_seconds:", NETWORK_VARS)
-        self.assertIn("wireless.@wifi-iface[$idx].ssid='{{ garage_mgmt_ssid_effective }}'", ROUTER_GARAGE)
-        self.assertIn("uci set wireless.sta='wifi-iface'", ROUTER_GARAGE)
-        self.assertIn("uci set wireless.sta.disabled='0'", ROUTER_GARAGE)
-        self.assertIn("uci -q delete wireless.sta.wds", ROUTER_GARAGE)
-        self.assertIn("selected_radio='{{ garage_test_repeater_radio_effective }}'", ROUTER_GARAGE)
-        self.assertIn("iwinfo \"$radio\" scan", ROUTER_GARAGE)
-        self.assertIn("Show repeater diagnostics when test-mode uplink check fails", ROUTER_GARAGE)
-        self.assertIn("Test-mode check: verify repeater uplink internet and tailscale control-plane reachability", ROUTER_GARAGE)
-        self.assertIn("ifstatus {{ garage_test_repeater_network_effective }}", ROUTER_GARAGE)
-        self.assertIn("ifup {{ garage_test_repeater_network_effective }}", ROUTER_GARAGE)
-        self.assertIn("uplink_wait_elapsed_seconds=$elapsed", ROUTER_GARAGE)
-        self.assertIn("garage_test_uplink_wait_seconds_effective", ROUTER_GARAGE)
-        self.assertIn("garage_test_uplink_poll_interval_seconds_effective", ROUTER_GARAGE)
-        self.assertIn("Print repeater diagnostics summary when test-mode uplink check fails", ROUTER_GARAGE)
-        self.assertIn("uclient-fetch -T 5 -qO- https://{{ host }}", ROUTER_GARAGE)
-        self.assertIn("No usable wifi-device section found in wireless UCI config.", ROUTER_GARAGE)
-        self.assertIn("selected_radio=\"$(uci -q show wireless", ROUTER_GARAGE)
-        self.assertIn("Configure test-mode repeater password (secret)", ROUTER_GARAGE)
-        self.assertIn("garage_test_tailscale_ping.rc != 0", ROUTER_GARAGE)
-        self.assertIn("garage_test_mode is enabled; Wi-Fi radios are kept enabled", ROUTER_GARAGE)
-        self.assertIn("ifstatus wan", ROUTER_GARAGE)
-        self.assertIn("ifstatus {{ garage_test_repeater_network_effective }}", ROUTER_GARAGE)
-        self.assertIn("garage_wan_internet_check.rc == 0", ROUTER_GARAGE)
+        self.assertIn("wireless.@wifi-iface[$idx].ssid='{{ garage_mgmt_ssid_effective }}'", GARAGE_TASKS)
+        self.assertIn("uci set wireless.sta='wifi-iface'", GARAGE_TASKS)
+        self.assertIn("uci set wireless.sta.disabled='0'", GARAGE_TASKS)
+        self.assertIn("uci -q delete wireless.sta.wds", GARAGE_TASKS)
+        self.assertIn("selected_radio='{{ garage_test_repeater_radio_effective }}'", GARAGE_TASKS)
+        self.assertIn('iwinfo "$radio" scan', GARAGE_TASKS)
+        self.assertIn("Show repeater diagnostics when test-mode uplink check fails", GARAGE_TASKS)
+        self.assertIn("Test-mode check: verify repeater uplink internet and tailscale control-plane reachability", GARAGE_TASKS)
+        self.assertIn("ifstatus {{ garage_test_repeater_network_effective }}", GARAGE_TASKS)
+        self.assertIn("ifup {{ garage_test_repeater_network_effective }}", GARAGE_TASKS)
+        self.assertIn("uplink_wait_elapsed_seconds=$elapsed", GARAGE_TASKS)
+        self.assertIn("garage_test_uplink_wait_seconds_effective", GARAGE_TASKS)
+        self.assertIn("garage_test_uplink_poll_interval_seconds_effective", GARAGE_TASKS)
+        self.assertIn("Print repeater diagnostics summary when test-mode uplink check fails", GARAGE_TASKS)
+        self.assertIn("uclient-fetch -T 5 -qO- https://{{ host }}", GARAGE_TASKS)
+        self.assertIn("No usable wifi-device section found in wireless UCI config.", GARAGE_TASKS)
+        self.assertIn('selected_radio="$(uci -q show wireless', GARAGE_TASKS)
+        self.assertIn("Configure test-mode repeater password (secret)", GARAGE_TASKS)
+        self.assertIn("garage_test_tailscale_ping.rc != 0", GARAGE_TASKS)
+        self.assertIn("garage_test_mode is enabled; Wi-Fi radios are kept enabled", GARAGE_TASKS)
+        self.assertIn("ifstatus wan", GARAGE_TASKS)
+        self.assertIn("garage_wan_internet_check.rc == 0", GARAGE_TASKS)
 
     def test_garage_reload_handoff_is_best_effort(self):
-        self.assertIn("nohup sh -c \"sleep 2; /etc/init.d/network reload; wifi reload", ROUTER_GARAGE)
-        self.assertIn("ansible.builtin.wait_for", ROUTER_GARAGE)
-        self.assertIn("failed_when: false", ROUTER_GARAGE)
+        self.assertIn('nohup sh -c "sleep 2; /etc/init.d/network reload; wifi reload', GARAGE_TASKS)
+        self.assertIn("ansible.builtin.wait_for", GARAGE_TASKS)
+        self.assertIn("failed_when: false", GARAGE_TASKS)
 
     def test_garage_tailscale_exit_node_policy(self):
         self.assertIn("tailscale_enable: true", NETWORK_VARS)
@@ -104,34 +132,35 @@ class TestReadmeAlignment(unittest.TestCase):
         self.assertIn("vault_tailscale_oauth_client_id", README)
         self.assertIn("vault_tailscale_oauth_client_secret", README)
         self.assertIn("tskey-client-...", README)
-        self.assertIn("opkg update && opkg install kmod-tun tailscale", ROUTER_GARAGE)
-        self.assertIn("https://api.tailscale.com/api/v2/oauth/token", ROUTER_GARAGE)
-        self.assertIn("https://api.tailscale.com/api/v2/tailnet/{{ tailscale_oauth_tailnet_effective }}/keys", ROUTER_GARAGE)
-        self.assertIn("- 201", ROUTER_GARAGE)
-        self.assertIn("tailscale_oauth_key_result.status | default(0) in [200, 201]", ROUTER_GARAGE)
-        self.assertIn("tailscale_auth_key_for_up_effective", ROUTER_GARAGE)
-        self.assertIn("tailscale_use_oauth_secret_authkey_effective", ROUTER_GARAGE)
-        self.assertIn("--advertise-tags='{{ tailscale_oauth_tags_csv }}'", ROUTER_GARAGE)
-        self.assertIn("Show tailscale OAuth token diagnostics (best effort)", ROUTER_GARAGE)
-        self.assertIn("--advertise-exit-node", ROUTER_GARAGE)
-        self.assertIn("--advertise-routes='{{ tailscale_advertise_routes_csv }}'", ROUTER_GARAGE)
-        self.assertIn("(tailscale_up_authkey_result.rc | default(1)) != 0", ROUTER_GARAGE)
-        self.assertIn("(tailscale_up_oauth_key_result.rc | default(1)) != 0", ROUTER_GARAGE)
+        self.assertIn("opkg update && opkg install kmod-tun tailscale", GARAGE_TASKS)
+        self.assertIn("https://api.tailscale.com/api/v2/oauth/token", GARAGE_TASKS)
+        self.assertIn("https://api.tailscale.com/api/v2/tailnet/{{ tailscale_oauth_tailnet_effective }}/keys", GARAGE_TASKS)
+        self.assertIn("- 201", GARAGE_TASKS)
+        self.assertIn("tailscale_oauth_key_result.status | default(0) in [200, 201]", GARAGE_TASKS)
+        self.assertIn("tailscale_auth_key_for_up_effective", GARAGE_TASKS)
+        self.assertIn("tailscale_use_oauth_secret_authkey_effective", GARAGE_TASKS)
+        self.assertIn("--advertise-tags='{{ tailscale_oauth_tags_csv }}'", GARAGE_TASKS)
+        self.assertIn("Show tailscale OAuth token diagnostics (best effort)", GARAGE_TASKS)
+        self.assertIn("--advertise-exit-node", GARAGE_TASKS)
+        self.assertIn("--advertise-routes='{{ tailscale_advertise_routes_csv }}'", GARAGE_TASKS)
+        self.assertIn("(tailscale_up_authkey_result.rc | default(1)) != 0", GARAGE_TASKS)
+        self.assertIn("(tailscale_up_oauth_key_result.rc | default(1)) != 0", GARAGE_TASKS)
 
     def test_garage_wan_pppoe_policy(self):
         self.assertIn("garage_wan_proto: 'pppoe'", NETWORK_VARS)
         self.assertIn("garage_wan_vlan_tag: '911'", NETWORK_VARS)
-        self.assertIn("not (garage_test_mode_effective | bool)", ROUTER_GARAGE)
+        self.assertIn("garage_wan_proto_default: \"pppoe\"", GARAGE_DEFAULTS)
+        self.assertIn("not (garage_test_mode_effective | bool)", GARAGE_TASKS)
         self.assertIn("PPPoE WAN configuration is skipped", README)
         self.assertIn("vault_garage_wan_pppoe_username", README)
         self.assertIn("vault_garage_wan_pppoe_password", README)
         self.assertIn("VLAN tag: **911**", README)
-        self.assertIn("uci set network.wan_vlan='device'", ROUTER_GARAGE)
-        self.assertIn("uci set network.wan_vlan.vid='{{ garage_wan_vlan_tag_effective }}'", ROUTER_GARAGE)
-        self.assertIn("uci set network.wan.proto='pppoe'", ROUTER_GARAGE)
-        self.assertIn("uci set network.wan.device=\"$wan_vlan_dev\"", ROUTER_GARAGE)
-        self.assertIn("uci set network.wan.username='{{ garage_wan_pppoe_username_effective }}'", ROUTER_GARAGE)
-        self.assertIn("uci set network.wan.password='{{ garage_wan_pppoe_password_effective }}'", ROUTER_GARAGE)
+        self.assertIn("uci set network.wan_vlan='device'", GARAGE_TASKS)
+        self.assertIn("uci set network.wan_vlan.vid='{{ garage_wan_vlan_tag_effective }}'", GARAGE_TASKS)
+        self.assertIn("uci set network.wan.proto='pppoe'", GARAGE_TASKS)
+        self.assertIn('uci set network.wan.device="$wan_vlan_dev"', GARAGE_TASKS)
+        self.assertIn("uci set network.wan.username='{{ garage_wan_pppoe_username_effective }}'", GARAGE_TASKS)
+        self.assertIn("uci set network.wan.password='{{ garage_wan_pppoe_password_effective }}'", GARAGE_TASKS)
 
 
 if __name__ == "__main__":

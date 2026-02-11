@@ -1,0 +1,231 @@
+- name: Set router hostname and timezone
+  ansible.builtin.raw: |
+    uci set system.@system[0].hostname='router-garage'
+    uci set system.@system[0].zonename='Europe/London'
+    uci set system.@system[0].timezone='GMT0BST,M3.5.0/1,M10.5.0'
+
+- name: Rename garage Wi-Fi SSIDs to management label
+  ansible.builtin.raw: |
+    idx=0
+    while uci -q get wireless.@wifi-iface[$idx] >/dev/null 2>&1; do
+      uci set wireless.@wifi-iface[$idx].ssid='{{ garage_mgmt_ssid_effective }}'
+      idx=$((idx+1))
+    done
+
+- name: Set LAN management interface
+  ansible.builtin.raw: |
+    uci set network.lan.ipaddr='{{ lan_ip }}'
+    uci set network.lan.netmask='{{ lan_netmask }}'
+
+- name: Configure WAN VLAN device for PPPoE
+  ansible.builtin.raw: |
+    current_wan_dev="$(uci -q get network.wan.device || true)"
+    wan_parent='{{ garage_wan_parent_if_effective }}'
+    if [ -z "$wan_parent" ]; then
+      if [ -n "$current_wan_dev" ]; then
+        case "$current_wan_dev" in
+          *.*) wan_parent="${current_wan_dev%%.*}" ;;
+          *) wan_parent="$current_wan_dev" ;;
+        esac
+      else
+        wan_parent='eth1'
+      fi
+    fi
+    wan_vlan_dev="${wan_parent}.{{ garage_wan_vlan_tag_effective }}"
+    uci -q delete network.wan_vlan
+    uci set network.wan_vlan='device'
+    uci set network.wan_vlan.type='8021q'
+    uci set network.wan_vlan.ifname="$wan_parent"
+    uci set network.wan_vlan.vid='{{ garage_wan_vlan_tag_effective }}'
+    uci set network.wan_vlan.name="$wan_vlan_dev"
+    uci set network.wan.device="$wan_vlan_dev"
+  when:
+    - garage_wan_proto_effective == "pppoe"
+    - not (garage_test_mode_effective | bool)
+
+- name: Configure WAN PPPoE credentials and behavior
+  ansible.builtin.raw: |
+    uci set network.wan.proto='pppoe'
+    uci set network.wan.username='{{ garage_wan_pppoe_username_effective }}'
+    uci set network.wan.password='{{ garage_wan_pppoe_password_effective }}'
+    uci set network.wan.mtu='{{ garage_wan_pppoe_mtu_effective }}'
+    uci set network.wan.ipv6='auto'
+    uci set network.wan.peerdns='1'
+    {% if garage_wan_pppoe_service_effective | length > 0 %}
+    uci set network.wan.service='{{ garage_wan_pppoe_service_effective }}'
+    {% endif %}
+  when:
+    - garage_wan_proto_effective == "pppoe"
+    - not (garage_test_mode_effective | bool)
+  no_log: true
+
+- name: Configure test-mode repeater uplink (Wi-Fi WAN)
+  ansible.builtin.raw: |
+    uci -q delete network.{{ garage_test_repeater_network_effective }}
+    uci set network.{{ garage_test_repeater_network_effective }}='interface'
+    uci set network.{{ garage_test_repeater_network_effective }}.proto='dhcp'
+    uci set network.{{ garage_test_repeater_network_effective }}.peerdns='1'
+    uci set network.{{ garage_test_repeater_network_effective }}.metric='10'
+
+    ssid={{ garage_test_repeater_ssid_effective | quote }}
+    selected_radio='{{ garage_test_repeater_radio_effective }}'
+    for radio in {{ garage_test_repeater_radios_effective | join(' ') }}; do
+      uci -q get wireless."$radio" >/dev/null 2>&1 || continue
+      if iwinfo "$radio" scan 2>/dev/null | grep -F "ESSID: \"$ssid\"" >/dev/null 2>&1; then
+        selected_radio="$radio"
+        break
+      fi
+    done
+    if ! uci -q get wireless."$selected_radio" >/dev/null 2>&1; then
+      for radio in {{ garage_test_repeater_radios_effective | join(' ') }}; do
+        if uci -q get wireless."$radio" >/dev/null 2>&1; then
+          selected_radio="$radio"
+          break
+        fi
+      done
+    fi
+    if ! uci -q get wireless."$selected_radio" >/dev/null 2>&1; then
+      selected_radio="$(uci -q show wireless | sed -n "s/^wireless\\.\\([^.=]*\\)=wifi-device$/\\1/p" | head -n 1)"
+    fi
+    [ -n "$selected_radio" ] || selected_radio='radio0'
+    if ! uci -q get wireless."$selected_radio" >/dev/null 2>&1; then
+      echo "No usable wifi-device section found in wireless UCI config."
+      uci -q show wireless || true
+      exit 11
+    fi
+
+    uci set wireless."$selected_radio".disabled='0'
+    uci -q delete wireless.sta
+    uci set wireless.sta='wifi-iface'
+    uci set wireless.sta.device="$selected_radio"
+    uci set wireless.sta.mode='sta'
+    uci set wireless.sta.network='{{ garage_test_repeater_network_effective }}'
+    uci set wireless.sta.ssid={{ garage_test_repeater_ssid_effective | quote }}
+    uci set wireless.sta.encryption='{{ garage_test_repeater_encryption_effective }}'
+    uci set wireless.sta.disabled='0'
+    uci -q delete wireless.sta.wds
+
+    idx=0
+    while uci -q get firewall.@zone[$idx] >/dev/null 2>&1; do
+      if [ "$(uci -q get firewall.@zone[$idx].name)" = "wan" ]; then
+        uci -q del_list firewall.@zone[$idx].network='{{ garage_test_repeater_network_effective }}'
+        uci add_list firewall.@zone[$idx].network='{{ garage_test_repeater_network_effective }}'
+        break
+      fi
+      idx=$((idx+1))
+    done
+  when: garage_test_mode_effective | bool
+
+- name: Configure test-mode repeater password (secret)
+  ansible.builtin.raw: |
+    uci set wireless.sta.key={{ garage_test_repeater_password_effective | quote }}
+  when: garage_test_mode_effective | bool
+  no_log: true
+
+- name: Ensure VLAN interfaces exist
+  ansible.builtin.raw: |
+    {% for vlan in vlans %}
+    uci -q delete network.vlan{{ vlan.id }}
+    uci set network.vlan{{ vlan.id }}='interface'
+    uci set network.vlan{{ vlan.id }}.proto='static'
+    uci set network.vlan{{ vlan.id }}.device='br-lan.{{ vlan.id }}'
+    uci set network.vlan{{ vlan.id }}.ipaddr='{{ vlan.ip }}'
+    uci set network.vlan{{ vlan.id }}.netmask='255.255.255.0'
+    {% endfor %}
+
+- name: Ensure DHCP pools exist for routed VLANs
+  ansible.builtin.raw: |
+    {% for vlan in vlans %}
+    uci -q delete dhcp.vlan{{ vlan.id }}
+    uci set dhcp.vlan{{ vlan.id }}='dhcp'
+    uci set dhcp.vlan{{ vlan.id }}.interface='vlan{{ vlan.id }}'
+    uci set dhcp.vlan{{ vlan.id }}.start='100'
+    uci set dhcp.vlan{{ vlan.id }}.limit='150'
+    uci set dhcp.vlan{{ vlan.id }}.leasetime='12h'
+    {% endfor %}
+
+- name: Configure firewall zones for VLANs
+  ansible.builtin.raw: |
+    {% for vlan in vlans %}
+    uci -q delete firewall.{{ vlan.zone }}
+    uci set firewall.{{ vlan.zone }}='zone'
+    uci set firewall.{{ vlan.zone }}.name='{{ vlan.zone }}'
+    uci set firewall.{{ vlan.zone }}.network='vlan{{ vlan.id }}'
+    uci set firewall.{{ vlan.zone }}.input='{{ 'ACCEPT' if vlan.name in ['servers', 'trusted'] else 'REJECT' }}'
+    uci set firewall.{{ vlan.zone }}.output='ACCEPT'
+    uci set firewall.{{ vlan.zone }}.forward='{{ 'ACCEPT' if vlan.name == 'servers' else 'REJECT' }}'
+    {% endfor %}
+
+- name: Configure inter-zone forwarding rules from vars
+  ansible.builtin.raw: |
+    idx=0
+    while uci -q get firewall.forwarding[$idx] >/dev/null 2>&1; do
+      uci -q delete firewall.forwarding[$idx]
+    done
+    {% for rule in forwarding_rules %}
+    uci add firewall forwarding >/dev/null
+    uci set firewall.@forwarding[-1].src='{{ rule.src }}'
+    uci set firewall.@forwarding[-1].dest='{{ rule.dest }}'
+    {% endfor %}
+
+- name: Add trusted to servers limited management rule
+  ansible.builtin.raw: |
+    uci -q delete firewall.trusted_to_servers_mgmt
+    uci set firewall.trusted_to_servers_mgmt='rule'
+    uci set firewall.trusted_to_servers_mgmt.name='Trusted to Servers Web and SSH'
+    uci set firewall.trusted_to_servers_mgmt.src='trusted_zone'
+    uci set firewall.trusted_to_servers_mgmt.dest='server_zone'
+    uci set firewall.trusted_to_servers_mgmt.proto='tcp'
+    uci set firewall.trusted_to_servers_mgmt.dest_port='22 80 443'
+    uci set firewall.trusted_to_servers_mgmt.target='ACCEPT'
+
+- name: Commit core UCI changes
+  ansible.builtin.raw: |
+    uci commit system
+    uci commit network
+    uci commit dhcp
+    uci commit firewall
+    uci commit wireless
+
+- name: Restart firewall and dnsmasq before LAN IP handoff
+  ansible.builtin.raw: |
+    /etc/init.d/dnsmasq restart || /etc/init.d/dnsmasq start
+    /etc/init.d/firewall restart
+
+- name: Apply delayed network and Wi-Fi reload for safer SSH handoff
+  ansible.builtin.raw: |
+    nohup sh -c "sleep 2; /etc/init.d/network reload; wifi reload >/dev/null 2>&1 || true" >/dev/null 2>&1 &
+
+- name: Wait for SSH on post-change management IP (best effort)
+  ansible.builtin.wait_for:
+    host: "{{ lan_ip }}"
+    port: 22
+    delay: 4
+    timeout: 90
+  delegate_to: localhost
+  become: false
+  register: garage_handoff_wait
+  failed_when: false
+  changed_when: false
+
+- name: Show reconnection hint
+  ansible.builtin.debug:
+    msg: >-
+      If your control host route changed during reload, reconnect using
+      ssh root@{{ lan_ip }} and rerun with -e ansible_host=192.168.8.1 for
+      future factory-reset bootstrap runs.
+
+- name: Reset SSH control connection after delayed reload (test mode)
+  ansible.builtin.meta: reset_connection
+
+- name: Wait for SSH port after control-connection reset (test mode)
+  ansible.builtin.wait_for:
+    host: "{{ lan_ip }}"
+    port: 22
+    delay: 2
+    timeout: 90
+  delegate_to: localhost
+  become: false
+  changed_when: false
+  when: garage_test_mode_effective | bool
+

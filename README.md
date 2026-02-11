@@ -7,12 +7,42 @@
 
 ---
 
+
+## 0.0 Project structure (standardised role layout)
+
+The Ansible project has been split into reusable roles for easier debugging and maintenance:
+
+```text
+ansible-meerkat/
+├── inventory.ini
+├── group_vars/
+│   └── all/
+│       ├── network.yml
+│       └── vault.yml
+├── playbooks/
+│   ├── router_garage.yml
+│   └── router_office_ap.yml
+└── roles/
+    ├── router_garage/
+    │   ├── defaults/main.yml
+    │   └── tasks/
+    │       ├── main.yml
+    │       ├── policy_and_validation.yml
+    │       ├── core_network.yml
+    │       ├── test_mode_checks.yml
+    │       ├── tailscale.yml
+    │       └── radio_policy.yml
+    └── router_office_ap/
+        ├── defaults/main.yml
+        └── tasks/main.yml
+```
+
 ## 0. Factory-Reset to Ansible (GL.iNet + `community.openwrt`)
 
 This section is the **direct path** from a factory-reset GL.iNet router to a working Ansible run using the official OpenWrt collection:
 
 - Collection: <https://galaxy.ansible.com/ui/repo/published/community/openwrt/>
-- Playbooks in this repo: `ansible-meerkat/setup_router_garage.yml` and `ansible-meerkat/setup_router_office_ap.yml`
+- Playbooks in this repo: `ansible-meerkat/playbooks/router_garage.yml` and `ansible-meerkat/playbooks/router_office_ap.yml` (legacy wrapper playbooks remain for backwards compatibility).
 
 ### 0.1 Preconditions
 
@@ -127,7 +157,7 @@ SSH bootstrap note:
    > ```
 3. Run playbook:
    ```bash
-   ansible-playbook -i ansible-meerkat/inventory.ini ansible-meerkat/setup_router_garage.yml -k --ask-vault-pass -e ansible_host=192.168.8.1
+   ansible-playbook -i ansible-meerkat/inventory.ini ansible-meerkat/playbooks/router_garage.yml -k --ask-vault-pass -e ansible_host=192.168.8.1
    ```
 4. The playbook configures garage WAN as PPPoE on VLAN `911` (using vault credentials) when not in test mode, renames garage SSIDs to `homelab_garage_mngmt`, and attempts to configure Tailscale as an exit node.
    - Live/prod mode: disables 2.4/5 GHz radios only after WAN + internet are confirmed up.
@@ -148,7 +178,7 @@ SSH bootstrap note:
    > ```
 4. Run playbook:
    ```bash
-   ansible-playbook -i ansible-meerkat/inventory.ini ansible-meerkat/setup_router_office_ap.yml -k --ask-vault-pass
+   ansible-playbook -i ansible-meerkat/inventory.ini ansible-meerkat/playbooks/router_office_ap.yml -k --ask-vault-pass
    ```
 5. After playbook, office AP host should be reachable at `10.1.0.4`.
 
@@ -294,6 +324,6 @@ If desired, replace `-k` with SSH keys once initial provisioning is complete.
     * `ha.meerkat.lan` -> `10.30.0.50:8123` (Home Assistant)
 
 ### **VPN: Tailscale**
-* **Exit Node:** Garage playbook runs `tailscale up --advertise-exit-node`.
-* **Subnet Routes:** Garage playbook advertises `10.10.0.0/24` and `10.20.0.0/24`.
+* **Exit Node:** The garage role runs `tailscale up --advertise-exit-node`.
+* **Subnet Routes:** The garage role advertises `10.10.0.0/24` and `10.20.0.0/24`.
 * **Auth:** If the node is not already authenticated, set `tailscale_auth_key` in Vault (standard auth key or OAuth client secret `tskey-client-...`) or run `tailscale up` manually once on the router.
