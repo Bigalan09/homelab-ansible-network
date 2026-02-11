@@ -83,7 +83,9 @@ Test mode notes:
 - Set `garage_test_mode: true` in `ansible-meerkat/group_vars/all/network.yml`.
 - In test mode, the router joins your upstream Wi-Fi as repeater uplink (`wwan`) and keeps Wi-Fi radios enabled so internet remains available for Tailscale.
 - In test mode, PPPoE WAN configuration is skipped.
-- In test mode, the playbook verifies repeater uplink internet (`8.8.8.8`/`1.1.1.1`) and control-plane reachability to `login.tailscale.com` + `api.tailscale.com` (with retries); if those fail, the run fails fast.
+- In test mode, repeater config defaults to `garage_test_repeater_radio: 'radio1'` and `garage_test_repeater_encryption: 'sae'` (5 GHz + WPA3). The playbook also scans candidate radios and picks the first one that sees your configured repeater SSID.
+- In test mode, uplink validation waits up to `garage_test_uplink_wait_seconds` (default `90`) and polls every `garage_test_uplink_poll_interval_seconds` (default `5`) before failing.
+- In test mode, the playbook verifies repeater uplink internet (`8.8.8.8`/`1.1.1.1`) and control-plane reachability to `login.tailscale.com` + `api.tailscale.com`; if those fail, the run fails fast.
 - In live/prod mode (`garage_test_mode: false`), radios can be disabled after WAN/internet checks pass.
 
 ```bash
@@ -101,6 +103,9 @@ or
 ```bash
 --vault-password-file ~/.ansible/.vault_pass.txt
 ```
+
+SSH bootstrap note:
+- `ansible-meerkat/inventory.ini` sets `ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'` for lab convenience, so factory resets do not require cleaning `~/.ssh/known_hosts`.
 
 ### 0.4 Configure Router Garage (gateway) from factory defaults
 

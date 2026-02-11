@@ -17,11 +17,22 @@
       - radio1
     garage_test_mode_default: false
     garage_test_repeater_network_default: "wwan"
-    garage_test_repeater_radio_default: "radio0"
-    garage_test_repeater_encryption_default: "psk2"
+    garage_test_repeater_radio_default: "radio1"
+    garage_test_repeater_encryption_default: "sae"
+    garage_test_repeater_radios_default:
+      - "radio1"
+      - "radio0"
+      - "radio2"
+    garage_test_repeater_encryptions_default:
+      - "sae"
+      - "sae-mixed"
+      - "psk2"
+      - "psk-mixed"
     garage_test_tailscale_hosts_default:
       - "login.tailscale.com"
       - "api.tailscale.com"
+    garage_test_uplink_wait_seconds_default: 90
+    garage_test_uplink_poll_interval_seconds_default: 5
     tailscale_enable_default: true
     tailscale_advertise_routes_default:
       - "10.10.0.0/24"
@@ -43,7 +54,11 @@
         garage_test_repeater_network_effective: "{{ garage_test_repeater_network | default(garage_test_repeater_network_default) }}"
         garage_test_repeater_radio_effective: "{{ garage_test_repeater_radio | default(garage_test_repeater_radio_default) }}"
         garage_test_repeater_encryption_effective: "{{ garage_test_repeater_encryption | default(garage_test_repeater_encryption_default) }}"
+        garage_test_repeater_radios_effective: "{{ garage_test_repeater_radios | default(garage_test_repeater_radios_default) }}"
+        garage_test_repeater_encryptions_effective: "{{ garage_test_repeater_encryptions | default(garage_test_repeater_encryptions_default) }}"
         garage_test_tailscale_hosts_effective: "{{ garage_test_tailscale_hosts | default(garage_test_tailscale_hosts_default) }}"
+        garage_test_uplink_wait_seconds_effective: "{{ garage_test_uplink_wait_seconds | default(garage_test_uplink_wait_seconds_default) }}"
+        garage_test_uplink_poll_interval_seconds_effective: "{{ garage_test_uplink_poll_interval_seconds | default(garage_test_uplink_poll_interval_seconds_default) }}"
         garage_test_repeater_ssid_effective: "{{ garage_test_repeater_ssid | default(vault_garage_test_repeater_ssid | default('')) }}"
         garage_test_repeater_password_effective: "{{ garage_test_repeater_password | default(vault_garage_test_repeater_password | default('')) }}"
         tailscale_enable_effective: "{{ tailscale_enable | default(tailscale_enable_default) }}"
@@ -159,15 +174,43 @@
         uci set network.{{ garage_test_repeater_network_effective }}.peerdns='1'
         uci set network.{{ garage_test_repeater_network_effective }}.metric='10'
 
-        uci set wireless.{{ garage_test_repeater_radio_effective }}.disabled='0'
-        uci -q delete wireless.repeater_uplink
-        uci set wireless.repeater_uplink='wifi-iface'
-        uci set wireless.repeater_uplink.device='{{ garage_test_repeater_radio_effective }}'
-        uci set wireless.repeater_uplink.mode='sta'
-        uci set wireless.repeater_uplink.network='{{ garage_test_repeater_network_effective }}'
-        uci set wireless.repeater_uplink.ssid='{{ garage_test_repeater_ssid_effective }}'
-        uci set wireless.repeater_uplink.encryption='{{ garage_test_repeater_encryption_effective }}'
-        uci set wireless.repeater_uplink.key='{{ garage_test_repeater_password_effective }}'
+        ssid={{ garage_test_repeater_ssid_effective | quote }}
+        selected_radio='{{ garage_test_repeater_radio_effective }}'
+        for radio in {{ garage_test_repeater_radios_effective | join(' ') }}; do
+          uci -q get wireless."$radio" >/dev/null 2>&1 || continue
+          if iwinfo "$radio" scan 2>/dev/null | grep -F "ESSID: \"$ssid\"" >/dev/null 2>&1; then
+            selected_radio="$radio"
+            break
+          fi
+        done
+        if ! uci -q get wireless."$selected_radio" >/dev/null 2>&1; then
+          for radio in {{ garage_test_repeater_radios_effective | join(' ') }}; do
+            if uci -q get wireless."$radio" >/dev/null 2>&1; then
+              selected_radio="$radio"
+              break
+            fi
+          done
+        fi
+        if ! uci -q get wireless."$selected_radio" >/dev/null 2>&1; then
+          selected_radio="$(uci -q show wireless | sed -n "s/^wireless\\.\\([^.=]*\\)=wifi-device$/\\1/p" | head -n 1)"
+        fi
+        [ -n "$selected_radio" ] || selected_radio='radio0'
+        if ! uci -q get wireless."$selected_radio" >/dev/null 2>&1; then
+          echo "No usable wifi-device section found in wireless UCI config."
+          uci -q show wireless || true
+          exit 11
+        fi
+
+        uci set wireless."$selected_radio".disabled='0'
+        uci -q delete wireless.sta
+        uci set wireless.sta='wifi-iface'
+        uci set wireless.sta.device="$selected_radio"
+        uci set wireless.sta.mode='sta'
+        uci set wireless.sta.network='{{ garage_test_repeater_network_effective }}'
+        uci set wireless.sta.ssid={{ garage_test_repeater_ssid_effective | quote }}
+        uci set wireless.sta.encryption='{{ garage_test_repeater_encryption_effective }}'
+        uci set wireless.sta.disabled='0'
+        uci -q delete wireless.sta.wds
 
         idx=0
         while uci -q get firewall.@zone[$idx] >/dev/null 2>&1; do
@@ -178,6 +221,11 @@
           fi
           idx=$((idx+1))
         done
+      when: garage_test_mode_effective | bool
+
+    - name: Configure test-mode repeater password (secret)
+      ansible.builtin.raw: |
+        uci set wireless.sta.key={{ garage_test_repeater_password_effective | quote }}
       when: garage_test_mode_effective | bool
       no_log: true
 
@@ -276,7 +324,6 @@
 
     - name: Reset SSH control connection after delayed reload (test mode)
       ansible.builtin.meta: reset_connection
-      when: garage_test_mode_effective | bool
 
     - name: Wait for SSH port after control-connection reset (test mode)
       ansible.builtin.wait_for:
@@ -291,8 +338,20 @@
 
     - name: "Test-mode check: verify repeater uplink internet and tailscale control-plane reachability"
       ansible.builtin.raw: |
-        uplink_up="$(ifstatus {{ garage_test_repeater_network_effective }} 2>/dev/null | jsonfilter -e '@.up' 2>/dev/null || echo false)"
+        ifup {{ garage_test_repeater_network_effective }} >/dev/null 2>&1 || true
+        elapsed=0
+        uplink_up=false
+        while [ "$elapsed" -lt "{{ garage_test_uplink_wait_seconds_effective | int }}" ]; do
+          uplink_up="$(ifstatus {{ garage_test_repeater_network_effective }} 2>/dev/null | jsonfilter -e '@.up' 2>/dev/null || echo false)"
+          [ "$uplink_up" = "true" ] && break
+          sleep {{ garage_test_uplink_poll_interval_seconds_effective | int }}
+          elapsed=$((elapsed + {{ garage_test_uplink_poll_interval_seconds_effective | int }}))
+        done
         [ "$uplink_up" = "true" ] || exit 2
+
+        echo "selected_radio=$(uci -q get wireless.sta.device || echo unknown)"
+        echo "selected_encryption=$(uci -q get wireless.sta.encryption || echo unknown)"
+        echo "uplink_wait_elapsed_seconds=$elapsed"
 
         ping -c1 -W3 8.8.8.8 >/dev/null 2>&1 || ping -c1 -W3 1.1.1.1 >/dev/null 2>&1 || exit 3
 
@@ -311,17 +370,54 @@
         exit 0
       register: garage_test_tailscale_ping
       changed_when: false
-      failed_when: garage_test_tailscale_ping.rc != 0
-      retries: 3
-      delay: 10
-      until: garage_test_tailscale_ping.rc == 0
+      failed_when: false
       when: garage_test_mode_effective | bool
+
+    - name: Show repeater diagnostics when test-mode uplink check fails
+      ansible.builtin.raw: |
+        echo "ifstatus {{ garage_test_repeater_network_effective }}:"
+        ifstatus {{ garage_test_repeater_network_effective }} || true
+        echo
+        echo "wireless.sta:"
+        uci show wireless.sta || true
+        echo
+        for r in {{ garage_test_repeater_radios_effective | join(' ') }}; do
+          echo "scan summary for $r:"
+          iwinfo "$r" scan 2>/dev/null | grep -E 'ESSID:|Encryption:' | head -n 60 || true
+          echo
+        done
+      register: garage_test_repeater_diag
+      changed_when: false
+      failed_when: false
+      when:
+        - garage_test_mode_effective | bool
+        - garage_test_tailscale_ping is defined
+        - garage_test_tailscale_ping.rc != 0
+
+    - name: Print repeater diagnostics summary when test-mode uplink check fails
+      ansible.builtin.debug:
+        msg: "{{ garage_test_repeater_diag.stdout | default('no diagnostics captured') }}"
+      when:
+        - garage_test_mode_effective | bool
+        - garage_test_tailscale_ping is defined
+        - garage_test_tailscale_ping.rc != 0
+
+    - name: Fail when repeater test-mode uplink validation fails
+      ansible.builtin.fail:
+        msg: >-
+          Test mode repeater uplink validation failed (rc={{ garage_test_tailscale_ping.rc }}).
+          Review diagnostics from the previous task to identify matching radio/encryption.
+      when:
+        - garage_test_mode_effective | bool
+        - garage_test_tailscale_ping is defined
+        - garage_test_tailscale_ping.rc != 0
 
     - name: Test-mode check passed for tailscale control-plane reachability
       ansible.builtin.debug:
         msg: >-
           Test mode uplink can reach tailscale control-plane hosts:
-          {{ garage_test_tailscale_hosts_effective | join(', ') }}
+          {{ garage_test_tailscale_hosts_effective | join(', ') }}.
+          {{ garage_test_tailscale_ping.stdout | default('') }}
       when:
         - garage_test_mode_effective | bool
         - garage_test_tailscale_ping.rc == 0

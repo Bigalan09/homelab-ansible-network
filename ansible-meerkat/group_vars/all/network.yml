@@ -8,11 +8,22 @@ garage_wifi_radios_to_disable:
   - radio1
 garage_test_mode: true
 garage_test_repeater_network: 'wwan'
-garage_test_repeater_radio: 'radio0'
-garage_test_repeater_encryption: 'psk2'
+garage_test_repeater_radio: 'radio1'
+garage_test_repeater_encryption: 'sae'
+garage_test_repeater_radios:
+  - 'radio1'
+  - 'radio0'
+  - 'radio2'
+garage_test_repeater_encryptions:
+  - 'sae'
+  - 'sae-mixed'
+  - 'psk2'
+  - 'psk-mixed'
 garage_test_tailscale_hosts:
   - 'login.tailscale.com'
   - 'api.tailscale.com'
+garage_test_uplink_wait_seconds: 90
+garage_test_uplink_poll_interval_seconds: 5
 garage_wan_proto: 'pppoe'
 garage_wan_pppoe_mtu: '1492'
 garage_wan_vlan_tag: '911'
