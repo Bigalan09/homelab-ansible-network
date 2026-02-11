@@ -32,6 +32,8 @@ garage_wan_parent_if: ''
 # Optional if your ISP requires it; keep empty otherwise.
 garage_wan_pppoe_service: ''
 tailscale_enable: true
+# Garage profile defaults: announce internal subnets and publish as an exit node.
+# These can be overridden in any tailscale component playbook.
 tailscale_advertise_routes:
   - '10.10.0.0/24'
   - '10.20.0.0/24'

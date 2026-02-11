@@ -24,14 +24,6 @@ garage_test_tailscale_hosts_default:
   - "api.tailscale.com"
 garage_test_uplink_wait_seconds_default: 90
 garage_test_uplink_poll_interval_seconds_default: 5
-tailscale_enable_default: true
-tailscale_advertise_routes_default:
-  - "10.10.0.0/24"
-  - "10.20.0.0/24"
-tailscale_oauth_tailnet_default: "-"
-tailscale_oauth_tags_default:
-  - "tag:router-garage"
-tailscale_oauth_key_expiry_seconds_default: 7776000
 garage_wan_proto_default: "pppoe"
 garage_wan_pppoe_mtu_default: "1492"
 garage_wan_vlan_tag_default: "911"

@@ -1,0 +1,11 @@
+---
+# Generic OpenWrt tailscale role defaults.
+tailscale_enable_default: true
+tailscale_hostname_default: "{{ inventory_hostname }}"
+tailscale_advertise_exit_node_default: false
+tailscale_advertise_routes_default: []
+tailscale_accept_routes_default: true
+tailscale_accept_dns_default: false
+tailscale_oauth_tailnet_default: "-"
+tailscale_oauth_tags_default: []
+tailscale_oauth_key_expiry_seconds_default: 7776000

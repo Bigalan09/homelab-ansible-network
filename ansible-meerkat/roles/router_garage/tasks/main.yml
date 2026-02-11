@@ -8,8 +8,5 @@
 - name: Apply garage test-mode verification tasks
   ansible.builtin.import_tasks: test_mode_checks.yml
 
-- name: Apply garage tailscale tasks
-  ansible.builtin.import_tasks: tailscale.yml
-
 - name: Apply garage radio policy tasks
   ansible.builtin.import_tasks: radio_policy.yml

@@ -21,7 +21,13 @@ ansible-meerkat/
 │       └── vault.yml
 ├── playbooks/
 │   ├── router_garage.yml
-│   └── router_office_ap.yml
+│   ├── router_office_ap.yml
+│   ├── router_office_ap_with_tailscale.yml
+│   └── components/
+│       ├── router_garage_core.yml
+│       ├── router_garage_tailscale.yml
+│       ├── router_office_ap_core.yml
+│       └── router_office_ap_tailscale.yml
 └── roles/
     ├── router_garage/
     │   ├── defaults/main.yml
@@ -30,9 +36,11 @@ ansible-meerkat/
     │       ├── policy_and_validation.yml
     │       ├── core_network.yml
     │       ├── test_mode_checks.yml
-    │       ├── tailscale.yml
     │       └── radio_policy.yml
-    └── router_office_ap/
+    ├── router_office_ap/
+    │   ├── defaults/main.yml
+    │   └── tasks/main.yml
+    └── tailscale_openwrt/
         ├── defaults/main.yml
         └── tasks/main.yml
 ```
@@ -42,7 +50,7 @@ ansible-meerkat/
 This section is the **direct path** from a factory-reset GL.iNet router to a working Ansible run using the official OpenWrt collection:
 
 - Collection: <https://galaxy.ansible.com/ui/repo/published/community/openwrt/>
-- Playbooks in this repo: `ansible-meerkat/playbooks/router_garage.yml` and `ansible-meerkat/playbooks/router_office_ap.yml` (legacy wrapper playbooks remain for backwards compatibility).
+- Playbooks in this repo: `ansible-meerkat/playbooks/router_garage.yml`, `ansible-meerkat/playbooks/router_office_ap.yml`, and `ansible-meerkat/playbooks/router_office_ap_with_tailscale.yml` (legacy wrapper playbooks remain for backwards compatibility).
 
 ### 0.1 Preconditions
 
@@ -159,7 +167,7 @@ SSH bootstrap note:
    ```bash
    ansible-playbook -i ansible-meerkat/inventory.ini ansible-meerkat/playbooks/router_garage.yml -k --ask-vault-pass -e ansible_host=192.168.8.1
    ```
-4. The playbook configures garage WAN as PPPoE on VLAN `911` (using vault credentials) when not in test mode, renames garage SSIDs to `homelab_garage_mngmt`, and attempts to configure Tailscale as an exit node.
+4. The playbook configures garage WAN as PPPoE on VLAN `911` (using vault credentials) when not in test mode, renames garage SSIDs to `homelab_garage_mngmt`, and runs the reusable Tailscale component configured for exit-node + route advertisements.
    - Live/prod mode: disables 2.4/5 GHz radios only after WAN + internet are confirmed up.
    - Test mode (`garage_test_mode: true`): configures Wi-Fi repeater uplink and keeps radios enabled.
 5. Reconnect your workstation so it can reach the new router IP (`10.1.0.1`).
@@ -176,9 +184,13 @@ SSH bootstrap note:
    > ```bash
    > ansible -i ansible-meerkat/inventory.ini access_points -m ansible.builtin.raw -a 'echo ok' -k
    > ```
-4. Run playbook:
+4. Run core AP playbook:
    ```bash
    ansible-playbook -i ansible-meerkat/inventory.ini ansible-meerkat/playbooks/router_office_ap.yml -k --ask-vault-pass
+   ```
+   Optional: join Office AP to tailnet without advertising exit-node/routes:
+   ```bash
+   ansible-playbook -i ansible-meerkat/inventory.ini ansible-meerkat/playbooks/router_office_ap_with_tailscale.yml -k --ask-vault-pass
    ```
 5. After playbook, office AP host should be reachable at `10.1.0.4`.
 
@@ -324,6 +336,7 @@ If desired, replace `-k` with SSH keys once initial provisioning is complete.
     * `ha.meerkat.lan` -> `10.30.0.50:8123` (Home Assistant)
 
 ### **VPN: Tailscale**
-* **Exit Node:** The garage role runs `tailscale up --advertise-exit-node`.
-* **Subnet Routes:** The garage role advertises `10.10.0.0/24` and `10.20.0.0/24`.
+* **Role split:** `tailscale_openwrt` is reusable for any OpenWrt device, and the playbook components decide whether a node advertises exit-node/routes.
+* **Garage profile:** advertises exit-node + `10.10.0.0/24` and `10.20.0.0/24`.
+* **Office AP profile:** joins tailnet without advertising exit-node/routes (via `router_office_ap_with_tailscale.yml`).
 * **Auth:** If the node is not already authenticated, set `tailscale_auth_key` in Vault (standard auth key or OAuth client secret `tskey-client-...`) or run `tailscale up` manually once on the router.
