@@ -4,14 +4,19 @@ This repository now codifies the README network intent directly in Ansible tasks
 
 ## What was aligned
 
-- Flint 2 gateway baseline now includes:
+- Naming is now role-based (`router-garage` and `router-office`) instead of model-based labels.
+- Variables are split into:
+  - `ansible-meerkat/group_vars/all/network.yml` for non-secrets,
+  - `ansible-meerkat/group_vars/all/vault.yml` for secrets (intended for Ansible Vault encryption).
+
+- Router Garage gateway baseline now includes:
   - management IP (`10.1.0.1/24`),
   - routed VLAN interfaces (`10`, `20`, `30`, `99`) on `br-lan.<vlan>`,
   - DHCP scopes for each routed VLAN,
   - firewall zones and forwarding rules,
   - specific trusted-to-servers management rule for TCP `22/80/443`.
 
-- Flint 3 AP baseline now includes:
+- Router Office AP baseline now includes:
   - AP management IP (`10.1.0.4`), gateway and DNS (`10.1.0.1`),
   - DHCP disabled on AP LAN,
   - VLAN backhaul interfaces on `br-lan.<vlan>`,

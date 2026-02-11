@@ -1,9 +1,9 @@
 # Homelab Network Documentation: Meerkat Manor
 
-**Last Updated:** 2026-02-09  
+**Last Updated:** 2026-02-11  
 **Location:** UK  
-**Gateway:** GL.iNet Flint 2 (Garage)  
-**Access Point:** GL.iNet Flint 3 (Office)
+**Gateway Role Host:** `router-garage` (GL.iNet/OpenWrt device in Garage)  
+**Office AP Role Host:** `router-office` (GL.iNet/OpenWrt device in Office, currently tested with Beryl MT3000)
 
 ---
 
@@ -12,13 +12,13 @@
 This section is the **direct path** from a factory-reset GL.iNet router to a working Ansible run using the official OpenWrt collection:
 
 - Collection: <https://galaxy.ansible.com/ui/repo/published/community/openwrt/>
-- Playbooks in this repo: `ansible-meerkat/setup_flint2.yml` and `ansible-meerkat/setup_flint3_ap.yml`
+- Playbooks in this repo: `ansible-meerkat/setup_router_garage.yml` and `ansible-meerkat/setup_router_office_ap.yml`
 
 ### 0.1 Preconditions
 
 - You have a laptop/workstation with Python 3.10+.
 - You can connect by Ethernet to each router during setup.
-- You can factory reset both devices (Flint 2 and Flint 3).
+- You can factory reset both role hosts (`router-garage` and `router-office`).
 
 ### 0.2 Factory reset each GL.iNet device
 
@@ -34,7 +34,7 @@ Do this **one device at a time**:
    ssh root@192.168.8.1
    ```
 
-> Both routers factory-reset to `192.168.8.1`, so configure Flint 2 first, then disconnect it before doing Flint 3.
+> Both routers factory-reset to `192.168.8.1`, so configure Router Garage first, then disconnect it before doing Router Office.
 
 ### 0.3 Install Ansible and the OpenWrt collection
 
@@ -48,9 +48,30 @@ pip install "ansible-core>=2.16"
 ansible-galaxy collection install -r ansible-meerkat/requirements.yml
 ```
 
-### 0.4 Configure Flint 2 (gateway) from factory defaults
+### 0.3.1 Use Ansible Vault for secrets
 
-1. Connect only to Flint 2 at `192.168.8.1`.
+- Non-secrets are in `ansible-meerkat/group_vars/all/network.yml`.
+- Secrets are in `ansible-meerkat/group_vars/all/vault.yml` (encrypt this file).
+
+```bash
+ansible-vault encrypt ansible-meerkat/group_vars/all/vault.yml
+```
+
+Use one of these options when running playbooks after encrypting:
+
+```bash
+--ask-vault-pass
+```
+
+or
+
+```bash
+--vault-password-file ~/.ansible/.vault_pass.txt
+```
+
+### 0.4 Configure Router Garage (gateway) from factory defaults
+
+1. Connect only to Router Garage at `192.168.8.1`.
 2. Check SSH connectivity:
    ```bash
    ansible -i ansible-meerkat/inventory.ini gateway -m ping -k
@@ -62,14 +83,14 @@ ansible-galaxy collection install -r ansible-meerkat/requirements.yml
    > ```
 3. Run playbook:
    ```bash
-   ansible-playbook -i ansible-meerkat/inventory.ini ansible-meerkat/setup_flint2.yml -k
+   ansible-playbook -i ansible-meerkat/inventory.ini ansible-meerkat/setup_router_garage.yml -k --ask-vault-pass
    ```
 4. Reconnect your workstation so it can reach the new router IP (`10.1.0.1`).
 
-### 0.5 Configure Flint 3 (AP) from factory defaults
+### 0.5 Configure Router Office (AP) from factory defaults
 
-1. Disconnect Flint 2 from your setup network (avoid IP conflict).
-2. Factory reset Flint 3 and connect to it at `192.168.8.1`.
+1. Disconnect Router Garage from your setup network (avoid IP conflict).
+2. Factory reset Router Office and connect to it at `192.168.8.1`.
 3. Check SSH connectivity:
    ```bash
    ansible -i ansible-meerkat/inventory.ini access_points -m ping -k
@@ -80,9 +101,9 @@ ansible-galaxy collection install -r ansible-meerkat/requirements.yml
    > ```
 4. Run playbook:
    ```bash
-   ansible-playbook -i ansible-meerkat/inventory.ini ansible-meerkat/setup_flint3_ap.yml -k
+   ansible-playbook -i ansible-meerkat/inventory.ini ansible-meerkat/setup_router_office_ap.yml -k --ask-vault-pass
    ```
-5. After playbook, AP should be reachable at `10.1.0.4`.
+5. After playbook, office AP host should be reachable at `10.1.0.4`.
 
 ### 0.6 Recommended post-checks
 
@@ -101,12 +122,12 @@ If desired, replace `-k` with SSH keys once initial provisioning is complete.
 ### **Zone A: Garage (Core & MDF)**
 * **Role:** Internet Entry, Routing, Storage, Compute.
 * **Hardware:**
-    * **Router:** GL.iNet Flint 2 (Gateway).
+    * **Router role host (`router-garage`):** GL.iNet/OpenWrt router (example: Flint 2).
     * **Switch:** 8x 2.5GbE + 2x 10GbE SFP+ (Unmanaged).
     * **Servers:** NAS (10GbE), Rack Desktop (10GbE), Zimaboard/Blade.
 * **Connections:**
-    * **ISP Fibre** -> Flint 2 WAN (PPPoE/Static IP).
-    * **Flint 2 LAN** -> Core Switch Port 1 (2.5GbE).
+    * **ISP Fibre** -> Router Garage WAN (PPPoE/Static IP).
+    * **Router Garage LAN** -> Core Switch Port 1 (2.5GbE).
     * **NAS** -> Core Switch SFP+ Port 1.
     * **Rack Desktop** -> Core Switch SFP+ Port 2.
     * **Uplink to Office** -> Core Switch 2.5GbE Port -> Wall Socket (Cable A).
@@ -115,11 +136,11 @@ If desired, replace `-k` with SSH keys once initial provisioning is complete.
 * **Role:** User Access, WiFi Broadcast, Workstation Peripherals.
 * **Hardware:**
     * **Switch:** 5x 2.5GbE PoE (Unmanaged).
-    * **AP:** GL.iNet Flint 3 (WiFi 7).
+    * **Office AP role host (`router-office`):** GL.iNet/OpenWrt router in AP mode (currently tested with Beryl MT3000).
     * **KVM:** Receiver Console.
 * **Connections:**
     * **Wall Socket (Cable A)** -> Office Switch Uplink.
-    * **Office Switch** -> Flint 3 WAN/LAN Port (2.5GbE).
+    * **Office Switch** -> Router Office WAN/LAN Port (2.5GbE).
     * **Wall Socket (Cable B)** -> KVM Receiver (Direct link to Garage).
 
 ---
@@ -136,15 +157,15 @@ If desired, replace `-k` with SSH keys once initial provisioning is complete.
 | **99** | **Guest** | `10.99.0.0/24` | `10.99.0.1` | Visitors. |
 
 ### **Static IP Assignments**
-* **Flint 2 (Router):** `10.1.0.1`
-* **Flint 3 (AP):** `10.1.0.4`
+* **`router-garage` (Router):** `10.1.0.1`
+* **`router-office` (AP):** `10.1.0.4`
 * **NAS:** `10.10.0.5`
 * **Rack Desktop:** `10.20.0.5`
 * **Reverse Proxy Server:** `10.10.0.20` (Hosting `meerkat.lan`)
 
 ---
 
-## 3. Router Configuration (Flint 2 - Garage)
+## 3. Router Configuration (`router-garage` - Garage)
 
 **Note:** Configuration performed via LuCI (`Advanced Settings`).
 
@@ -173,7 +194,7 @@ If desired, replace `-k` with SSH keys once initial provisioning is complete.
 
 ---
 
-## 4. WiFi Configuration (Flint 3 - Office)
+## 4. WiFi Configuration (`router-office` - Office)
 
 **Mode:** Access Point (AP) / Extender.
 
@@ -184,7 +205,7 @@ If desired, replace `-k` with SSH keys once initial provisioning is complete.
 | **Meerkat IoT** | 2.4GHz | `30` | WPA2-PSK | Smart Plugs, Cameras |
 | **Meerkat Guest** | 2.4GHz / 5GHz | `99` | WPA2/3 | Visitors |
 
-**Setup Note:** In LuCI on Flint 3, bridge the SSID interfaces to the corresponding VLANs (e.g., `br-lan.20`).
+**Setup Note:** In LuCI on Router Office, bridge the SSID interfaces to the corresponding VLANs (e.g., `br-lan.20`).
 
 ---
 
@@ -207,7 +228,7 @@ If desired, replace `-k` with SSH keys once initial provisioning is complete.
 
 ## 6. Internal Services & DNS (`meerkat.lan`)
 
-### **DNS: AdGuard Home (On Flint 2)**
+### **DNS: AdGuard Home (On Router Garage)**
 * **Location:** Applications -> AdGuard Home -> Settings.
 * **DNS Rewrites:**
     * Domain: `*.meerkat.lan`
@@ -222,5 +243,5 @@ If desired, replace `-k` with SSH keys once initial provisioning is complete.
     * `ha.meerkat.lan` -> `10.30.0.50:8123` (Home Assistant)
 
 ### **VPN: Tailscale**
-* **Exit Node:** Enabled on Flint 2.
+* **Exit Node:** Enabled on Router Garage.
 * **Subnet Routes:** Advertise `10.10.0.0/24` and `10.20.0.0/24`.

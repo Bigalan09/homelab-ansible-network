@@ -1,55 +1,6 @@
-# --- Global Settings ---
-wifi_country: 'GB'
+# Secrets only. Encrypt this file before committing:
+# ansible-vault encrypt ansible-meerkat/group_vars/all/vault.yml
 
-# --- VLAN Schema ---
-vlans:
-  - { id: 10, name: 'servers', ip: '10.10.0.1', zone: 'server_zone' }
-  - { id: 20, name: 'trusted', ip: '10.20.0.1', zone: 'trusted_zone' }
-  - { id: 30, name: 'iot', ip: '10.30.0.1', zone: 'iot_zone' }
-  - { id: 99, name: 'guest', ip: '10.99.0.1', zone: 'guest_zone' }
-
-# --- WiFi Configuration (Flint 3 AP) ---
-# Matches README SSIDs/VLANs:
-# - Meerkat Manor -> VLAN 20
-# - Meerkat IoT -> VLAN 30
-# - Meerkat Guest -> VLAN 99
-ssids:
-  - name: 'manor_5g'
-    ssid: 'Meerkat Manor'
-    vlan_id: 20
-    key: 'FamilyPass2026'
-    device: 'radio1'
-    encryption: 'sae'
-  - name: 'manor_6g'
-    ssid: 'Meerkat Manor'
-    vlan_id: 20
-    key: 'FamilyPass2026'
-    device: 'radio2'
-    encryption: 'sae'
-  - name: 'iot_2g'
-    ssid: 'Meerkat IoT'
-    vlan_id: 30
-    key: 'SmartHomeDevices'
-    device: 'radio0'
-    encryption: 'psk2'
-  - name: 'guest_2g'
-    ssid: 'Meerkat Guest'
-    vlan_id: 99
-    key: 'VisitorPass'
-    device: 'radio0'
-    encryption: 'psk-mixed'
-    isolate: '1'
-  - name: 'guest_5g'
-    ssid: 'Meerkat Guest'
-    vlan_id: 99
-    key: 'VisitorPass'
-    device: 'radio1'
-    encryption: 'psk-mixed'
-    isolate: '1'
-
-forwarding_rules:
-  - { src: 'trusted_zone', dest: 'server_zone' }
-  - { src: 'trusted_zone', dest: 'wan' }
-  - { src: 'server_zone', dest: 'wan' }
-  - { src: 'iot_zone', dest: 'wan' }
-  - { src: 'guest_zone', dest: 'wan' }
+vault_wifi_key_manor: 'FamilyPass2026'
+vault_wifi_key_iot: 'SmartHomeDevices'
+vault_wifi_key_guest: 'VisitorPass'

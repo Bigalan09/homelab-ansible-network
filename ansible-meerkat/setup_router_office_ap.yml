@@ -1,10 +1,11 @@
 ---
-- name: Configure Flint 3 Access Point (AP baseline)
+- name: Configure Office Router/AP (Access Point baseline)
   hosts: access_points
   become: false
   gather_facts: false
 
   vars_files:
+    - group_vars/all/network.yml
     - group_vars/all/vault.yml
 
   vars:
@@ -15,7 +16,7 @@
   tasks:
     - name: Set AP hostname and static management network
       ansible.builtin.raw: |
-        uci set system.@system[0].hostname='flint3'
+        uci set system.@system[0].hostname='router-office'
         uci set network.lan.proto='static'
         uci set network.lan.ipaddr='{{ ap_ip }}'
         uci set network.lan.netmask='{{ ap_netmask }}'
