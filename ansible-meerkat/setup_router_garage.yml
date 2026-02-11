@@ -69,7 +69,10 @@
         tailscale_oauth_client_secret_effective: "{{ tailscale_oauth_client_secret | default(vault_tailscale_oauth_client_secret | default('')) }}"
         tailscale_oauth_tailnet_effective: "{{ tailscale_oauth_tailnet | default(tailscale_oauth_tailnet_default) }}"
         tailscale_oauth_tags_effective: "{{ tailscale_oauth_tags | default(tailscale_oauth_tags_default) }}"
+        tailscale_oauth_tags_csv: "{{ (tailscale_oauth_tags | default(tailscale_oauth_tags_default)) | join(',') }}"
         tailscale_oauth_key_expiry_seconds_effective: "{{ tailscale_oauth_key_expiry_seconds | default(tailscale_oauth_key_expiry_seconds_default) }}"
+        tailscale_use_oauth_secret_authkey_effective: "{{ ((tailscale_auth_key | default('')) | length == 0) and ((tailscale_oauth_client_secret | default(vault_tailscale_oauth_client_secret | default(''))) | length > 0) }}"
+        tailscale_auth_key_for_up_effective: "{{ (tailscale_auth_key | default('')) if ((tailscale_auth_key | default('')) | length > 0) else (tailscale_oauth_client_secret | default(vault_tailscale_oauth_client_secret | default(''))) }}"
         tailscale_generated_auth_key_effective: ""
         garage_wan_proto_effective: "{{ garage_wan_proto | default(garage_wan_proto_default) }}"
         garage_wan_pppoe_mtu_effective: "{{ garage_wan_pppoe_mtu | default(garage_wan_pppoe_mtu_default) }}"
@@ -455,14 +458,17 @@
       register: tailscale_up_result
       failed_when: false
 
-    - name: Configure tailscale with auth key when required (best effort)
+    - name: Configure tailscale with auth key or OAuth client secret when required (best effort)
       ansible.builtin.raw: |
         if command -v tailscale >/dev/null 2>&1; then
           tailscale up \
-            --auth-key='{{ tailscale_auth_key_effective }}' \
+            --auth-key='{{ tailscale_auth_key_for_up_effective }}' \
             --hostname='router-garage' \
             --advertise-exit-node \
             --advertise-routes='{{ tailscale_advertise_routes_csv }}' \
+            {% if tailscale_use_oauth_secret_authkey_effective | bool and tailscale_oauth_tags_csv | length > 0 %}
+            --advertise-tags='{{ tailscale_oauth_tags_csv }}' \
+            {% endif %}
             --accept-routes=true \
             --accept-dns=false
         fi
@@ -470,7 +476,7 @@
         - tailscale_enable_effective | bool
         - tailscale_up_result is defined
         - tailscale_up_result.rc != 0
-        - tailscale_auth_key_effective | length > 0
+        - tailscale_auth_key_for_up_effective | length > 0
       register: tailscale_up_authkey_result
       failed_when: false
       no_log: true
@@ -499,6 +505,23 @@
         - tailscale_auth_key_effective | length == 0
         - tailscale_oauth_client_id_effective | length > 0
         - tailscale_oauth_client_secret_effective | length > 0
+        - (tailscale_up_authkey_result.rc | default(1)) != 0
+
+    - name: Show tailscale OAuth token diagnostics (best effort)
+      ansible.builtin.debug:
+        msg: >-
+          Tailscale OAuth token request did not return a usable access token.
+          status={{ tailscale_oauth_token_result.status | default('unknown') }}
+          response={{ tailscale_oauth_token_result.json | default(tailscale_oauth_token_result.content | default('no body')) }}
+      when:
+        - tailscale_enable_effective | bool
+        - tailscale_up_result is defined
+        - tailscale_up_result.rc != 0
+        - tailscale_auth_key_effective | length == 0
+        - tailscale_oauth_client_id_effective | length > 0
+        - tailscale_oauth_client_secret_effective | length > 0
+        - tailscale_oauth_token_result is defined
+        - (tailscale_oauth_token_result.status | default(0)) != 200 or (tailscale_oauth_token_result.json is not defined) or (tailscale_oauth_token_result.json.access_token is not defined)
 
     - name: Create tailscale auth key from OAuth credentials (best effort)
       ansible.builtin.uri:
@@ -559,6 +582,7 @@
         - tailscale_up_result.rc != 0
         - tailscale_auth_key_effective | length == 0
         - tailscale_oauth_key_result is defined
+        - not (tailscale_oauth_key_result is skipped)
         - tailscale_generated_auth_key_effective | length == 0
 
     - name: Configure tailscale with generated OAuth auth key (best effort)
@@ -586,9 +610,12 @@
       ansible.builtin.debug:
         msg: >-
           Tailscale is enabled but still needs authentication.
-          Provide tailscale_auth_key in Vault, or provide
+          Provide tailscale_auth_key in Vault (static auth key or OAuth
+          client secret), or provide
           vault_tailscale_oauth_client_id and
-          vault_tailscale_oauth_client_secret in Vault, or run on router:
+          vault_tailscale_oauth_client_secret in Vault. If using OAuth client
+          secret auth, ensure tailscale_oauth_tags are permitted by tagOwners.
+          Or run on router:
           tailscale up --hostname=router-garage --advertise-exit-node
           --advertise-routes='{{ tailscale_advertise_routes_csv }}'
       when:

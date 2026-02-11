@@ -76,8 +76,9 @@ ansible-vault encrypt ansible-meerkat/group_vars/all/vault.yml
 ```
 
 OAuth notes:
+- Preferred bootstrap: use OAuth client secret (`tskey-client-...`) as `tailscale_auth_key`, or store it in `vault_tailscale_oauth_client_secret` and let the playbook use it as `--auth-key` automatically.
 - OAuth client must include permission to create auth keys.
-- OAuth tags should allow `tag:router-garage` (configurable via `tailscale_oauth_tags`).
+- OAuth tags should allow `tag:router-garage` (configurable via `tailscale_oauth_tags`) and must be permitted by your tailnet ACL `tagOwners`.
 
 Test mode notes:
 - Set `garage_test_mode: true` in `ansible-meerkat/group_vars/all/network.yml`.
@@ -295,4 +296,4 @@ If desired, replace `-k` with SSH keys once initial provisioning is complete.
 ### **VPN: Tailscale**
 * **Exit Node:** Garage playbook runs `tailscale up --advertise-exit-node`.
 * **Subnet Routes:** Garage playbook advertises `10.10.0.0/24` and `10.20.0.0/24`.
-* **Auth:** If the node is not already authenticated, set `tailscale_auth_key` in Vault (or run `tailscale up` manually once on the router).
+* **Auth:** If the node is not already authenticated, set `tailscale_auth_key` in Vault (standard auth key or OAuth client secret `tskey-client-...`) or run `tailscale up` manually once on the router.
