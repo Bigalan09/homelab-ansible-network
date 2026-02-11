@@ -11,13 +11,30 @@
   vars:
     lan_ip: "10.1.0.1"
     lan_netmask: "255.255.255.0"
+    garage_mgmt_ssid_default: "homelab_garage_mngmt"
+    garage_wifi_radios_to_disable_default:
+      - radio0
+      - radio1
 
   tasks:
+    - name: Resolve garage Wi-Fi policy
+      ansible.builtin.set_fact:
+        garage_mgmt_ssid_effective: "{{ garage_mgmt_ssid | default(garage_mgmt_ssid_default) }}"
+        garage_wifi_radios_to_disable_effective: "{{ garage_wifi_radios_to_disable | default(garage_wifi_radios_to_disable_default) }}"
+
     - name: Set router hostname and timezone
       ansible.builtin.raw: |
         uci set system.@system[0].hostname='router-garage'
         uci set system.@system[0].zonename='Europe/London'
         uci set system.@system[0].timezone='GMT0BST,M3.5.0/1,M10.5.0'
+
+    - name: Rename garage Wi-Fi SSIDs to management label
+      ansible.builtin.raw: |
+        idx=0
+        while uci -q get wireless.@wifi-iface[$idx] >/dev/null 2>&1; do
+          uci set wireless.@wifi-iface[$idx].ssid='{{ garage_mgmt_ssid_effective }}'
+          idx=$((idx+1))
+        done
 
     - name: Set LAN management interface
       ansible.builtin.raw: |
@@ -81,15 +98,46 @@
         uci set firewall.trusted_to_servers_mgmt.dest_port='22 80 443'
         uci set firewall.trusted_to_servers_mgmt.target='ACCEPT'
 
+    - name: Disable garage 2.4/5 GHz radios after VLAN and firewall setup
+      ansible.builtin.raw: |
+        {% for radio in garage_wifi_radios_to_disable_effective %}
+        if uci -q get wireless.{{ radio }} >/dev/null 2>&1; then
+          uci set wireless.{{ radio }}.disabled='1'
+        fi
+        {% endfor %}
+
     - name: Commit UCI changes
       ansible.builtin.raw: |
         uci commit system
         uci commit network
         uci commit dhcp
         uci commit firewall
+        uci commit wireless
 
-    - name: Reload OpenWrt services
+    - name: Restart firewall and dnsmasq before LAN IP handoff
       ansible.builtin.raw: |
-        /etc/init.d/network reload
-        /etc/init.d/dnsmasq restart
+        /etc/init.d/dnsmasq restart || /etc/init.d/dnsmasq start
         /etc/init.d/firewall restart
+
+    - name: Apply delayed network and Wi-Fi reload for safer SSH handoff
+      ansible.builtin.raw: |
+        nohup sh -c "sleep 2; /etc/init.d/network reload; wifi reload >/dev/null 2>&1 || true" >/dev/null 2>&1 &
+
+    - name: Wait for SSH on post-change management IP (best effort)
+      ansible.builtin.wait_for:
+        host: "{{ lan_ip }}"
+        port: 22
+        delay: 4
+        timeout: 90
+      delegate_to: localhost
+      become: false
+      register: garage_handoff_wait
+      failed_when: false
+      changed_when: false
+
+    - name: Show reconnection hint
+      ansible.builtin.debug:
+        msg: >-
+          If your control host route changed during reload, reconnect using
+          ssh root@{{ lan_ip }} and rerun with -e ansible_host=192.168.8.1 for
+          future factory-reset bootstrap runs.

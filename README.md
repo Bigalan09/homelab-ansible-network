@@ -72,20 +72,26 @@ or
 ### 0.4 Configure Router Garage (gateway) from factory defaults
 
 1. Connect only to Router Garage at `192.168.8.1`.
+   > Inventory defaults to `router-garage=10.1.0.1` after bootstrap.  
+   > For a factory-reset run, override host once:
+   > ```bash
+   > -e ansible_host=192.168.8.1
+   > ```
 2. Check SSH connectivity:
    ```bash
-   ansible -i ansible-meerkat/inventory.ini gateway -m ping -k
+   ansible -i ansible-meerkat/inventory.ini gateway -m ping -k -e ansible_host=192.168.8.1
    ```
    > `ansible.builtin.ping` is a Python-based test module and expects a Python interpreter on the target.
    > OpenWrt/GL.iNet images often do not ship with Python, so use a raw SSH check instead when bootstrapping:
    > ```bash
-   > ansible -i ansible-meerkat/inventory.ini gateway -m ansible.builtin.raw -a 'echo ok' -k
+   > ansible -i ansible-meerkat/inventory.ini gateway -m ansible.builtin.raw -a 'echo ok' -k -e ansible_host=192.168.8.1
    > ```
 3. Run playbook:
    ```bash
-   ansible-playbook -i ansible-meerkat/inventory.ini ansible-meerkat/setup_router_garage.yml -k --ask-vault-pass
+   ansible-playbook -i ansible-meerkat/inventory.ini ansible-meerkat/setup_router_garage.yml -k --ask-vault-pass -e ansible_host=192.168.8.1
    ```
-4. Reconnect your workstation so it can reach the new router IP (`10.1.0.1`).
+4. The playbook renames garage SSIDs to `homelab_garage_mngmt` and then disables 2.4/5 GHz radios after VLAN/firewall configuration.
+5. Reconnect your workstation so it can reach the new router IP (`10.1.0.1`).
 
 ### 0.5 Configure Router Office (AP) from factory defaults
 

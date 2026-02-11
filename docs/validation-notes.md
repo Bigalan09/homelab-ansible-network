@@ -15,6 +15,8 @@ This repository now codifies the README network intent directly in Ansible tasks
   - DHCP scopes for each routed VLAN,
   - firewall zones and forwarding rules,
   - specific trusted-to-servers management rule for TCP `22/80/443`.
+  - garage Wi-Fi SSID relabeled to `homelab_garage_mngmt` before radio shutdown,
+  - 2.4/5 GHz radios disabled after VLAN/firewall policy is staged.
 
 - Router Office AP baseline now includes:
   - AP management IP (`10.1.0.4`), gateway and DNS (`10.1.0.1`),

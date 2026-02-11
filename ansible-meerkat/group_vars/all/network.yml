@@ -2,6 +2,10 @@
 
 # --- Global Settings ---
 wifi_country: 'GB'
+garage_mgmt_ssid: 'homelab_garage_mngmt'
+garage_wifi_radios_to_disable:
+  - radio0
+  - radio1
 
 # --- VLAN Schema ---
 vlans:

@@ -56,6 +56,16 @@ class TestReadmeAlignment(unittest.TestCase):
         self.assertIn("router-garage", INVENTORY)
         self.assertIn("router-office", INVENTORY)
 
+    def test_garage_wifi_policy_is_explicit(self):
+        self.assertIn("garage_mgmt_ssid: 'homelab_garage_mngmt'", NETWORK_VARS)
+        self.assertIn("wireless.@wifi-iface[$idx].ssid='{{ garage_mgmt_ssid_effective }}'", ROUTER_GARAGE)
+        self.assertIn("wireless.{{ radio }}.disabled='1'", ROUTER_GARAGE)
+
+    def test_garage_reload_handoff_is_best_effort(self):
+        self.assertIn("nohup sh -c \"sleep 2; /etc/init.d/network reload; wifi reload", ROUTER_GARAGE)
+        self.assertIn("ansible.builtin.wait_for", ROUTER_GARAGE)
+        self.assertIn("failed_when: false", ROUTER_GARAGE)
+
 
 if __name__ == "__main__":
     unittest.main()
