@@ -75,7 +75,9 @@
           Set vault_garage_wan_pppoe_username and
           vault_garage_wan_pppoe_password in group_vars/all/vault.yml,
           and set garage_wan_vlan_tag (e.g. 911) in network.yml.
-      when: garage_wan_proto_effective == "pppoe"
+      when:
+        - garage_wan_proto_effective == "pppoe"
+        - not (garage_test_mode_effective | bool)
 
     - name: Validate test-mode repeater credentials are available
       ansible.builtin.assert:
@@ -129,7 +131,9 @@
         uci set network.wan_vlan.vid='{{ garage_wan_vlan_tag_effective }}'
         uci set network.wan_vlan.name="$wan_vlan_dev"
         uci set network.wan.device="$wan_vlan_dev"
-      when: garage_wan_proto_effective == "pppoe"
+      when:
+        - garage_wan_proto_effective == "pppoe"
+        - not (garage_test_mode_effective | bool)
 
     - name: Configure WAN PPPoE credentials and behavior
       ansible.builtin.raw: |
@@ -142,7 +146,9 @@
         {% if garage_wan_pppoe_service_effective | length > 0 %}
         uci set network.wan.service='{{ garage_wan_pppoe_service_effective }}'
         {% endif %}
-      when: garage_wan_proto_effective == "pppoe"
+      when:
+        - garage_wan_proto_effective == "pppoe"
+        - not (garage_test_mode_effective | bool)
       no_log: true
 
     - name: Configure test-mode repeater uplink (Wi-Fi WAN)
@@ -268,22 +274,53 @@
           ssh root@{{ lan_ip }} and rerun with -e ansible_host=192.168.8.1 for
           future factory-reset bootstrap runs.
 
-    - name: "Test-mode check: verify repeater uplink reaches tailscale hosts"
+    - name: Reset SSH control connection after delayed reload (test mode)
+      ansible.builtin.meta: reset_connection
+      when: garage_test_mode_effective | bool
+
+    - name: Wait for SSH port after control-connection reset (test mode)
+      ansible.builtin.wait_for:
+        host: "{{ lan_ip }}"
+        port: 22
+        delay: 2
+        timeout: 90
+      delegate_to: localhost
+      become: false
+      changed_when: false
+      when: garage_test_mode_effective | bool
+
+    - name: "Test-mode check: verify repeater uplink internet and tailscale control-plane reachability"
       ansible.builtin.raw: |
-        failed=0
+        uplink_up="$(ifstatus {{ garage_test_repeater_network_effective }} 2>/dev/null | jsonfilter -e '@.up' 2>/dev/null || echo false)"
+        [ "$uplink_up" = "true" ] || exit 2
+
+        ping -c1 -W3 8.8.8.8 >/dev/null 2>&1 || ping -c1 -W3 1.1.1.1 >/dev/null 2>&1 || exit 3
+
         {% for host in garage_test_tailscale_hosts_effective %}
-        ping -c1 -W3 {{ host }} >/dev/null 2>&1 || failed=1
+        if command -v nslookup >/dev/null 2>&1; then
+          nslookup {{ host }} >/dev/null 2>&1 || exit 4
+        fi
+        if command -v uclient-fetch >/dev/null 2>&1; then
+          uclient-fetch -T 5 -qO- https://{{ host }} >/dev/null 2>&1 || exit 5
+        elif command -v wget >/dev/null 2>&1; then
+          wget -q -O /dev/null https://{{ host }} >/dev/null 2>&1 || exit 5
+        else
+          ping -c1 -W3 {{ host }} >/dev/null 2>&1 || exit 6
+        fi
         {% endfor %}
-        exit $failed
+        exit 0
       register: garage_test_tailscale_ping
       changed_when: false
       failed_when: garage_test_tailscale_ping.rc != 0
+      retries: 3
+      delay: 10
+      until: garage_test_tailscale_ping.rc == 0
       when: garage_test_mode_effective | bool
 
-    - name: Test-mode check passed for tailscale host reachability
+    - name: Test-mode check passed for tailscale control-plane reachability
       ansible.builtin.debug:
         msg: >-
-          Test mode uplink can reach tailscale hosts:
+          Test mode uplink can reach tailscale control-plane hosts:
           {{ garage_test_tailscale_hosts_effective | join(', ') }}
       when:
         - garage_test_mode_effective | bool

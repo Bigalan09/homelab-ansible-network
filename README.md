@@ -82,7 +82,8 @@ OAuth notes:
 Test mode notes:
 - Set `garage_test_mode: true` in `ansible-meerkat/group_vars/all/network.yml`.
 - In test mode, the router joins your upstream Wi-Fi as repeater uplink (`wwan`) and keeps Wi-Fi radios enabled so internet remains available for Tailscale.
-- In test mode, the playbook also pings `login.tailscale.com` and `api.tailscale.com` from the router; if those fail, the run fails fast.
+- In test mode, PPPoE WAN configuration is skipped.
+- In test mode, the playbook verifies repeater uplink internet (`8.8.8.8`/`1.1.1.1`) and control-plane reachability to `login.tailscale.com` + `api.tailscale.com` (with retries); if those fail, the run fails fast.
 - In live/prod mode (`garage_test_mode: false`), radios can be disabled after WAN/internet checks pass.
 
 ```bash
@@ -122,7 +123,7 @@ or
    ```bash
    ansible-playbook -i ansible-meerkat/inventory.ini ansible-meerkat/setup_router_garage.yml -k --ask-vault-pass -e ansible_host=192.168.8.1
    ```
-4. The playbook configures garage WAN as PPPoE on VLAN `911` (using vault credentials), renames garage SSIDs to `homelab_garage_mngmt`, and attempts to configure Tailscale as an exit node.
+4. The playbook configures garage WAN as PPPoE on VLAN `911` (using vault credentials) when not in test mode, renames garage SSIDs to `homelab_garage_mngmt`, and attempts to configure Tailscale as an exit node.
    - Live/prod mode: disables 2.4/5 GHz radios only after WAN + internet are confirmed up.
    - Test mode (`garage_test_mode: true`): configures Wi-Fi repeater uplink and keeps radios enabled.
 5. Reconnect your workstation so it can reach the new router IP (`10.1.0.1`).
