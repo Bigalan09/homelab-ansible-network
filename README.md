@@ -55,6 +55,11 @@ ansible-galaxy collection install -r ansible-meerkat/requirements.yml
    ```bash
    ansible -i ansible-meerkat/inventory.ini gateway -m ping -k
    ```
+   > `ansible.builtin.ping` is a Python-based test module and expects a Python interpreter on the target.
+   > OpenWrt/GL.iNet images often do not ship with Python, so use a raw SSH check instead when bootstrapping:
+   > ```bash
+   > ansible -i ansible-meerkat/inventory.ini gateway -m ansible.builtin.raw -a 'echo ok' -k
+   > ```
 3. Run playbook:
    ```bash
    ansible-playbook -i ansible-meerkat/inventory.ini ansible-meerkat/setup_flint2.yml -k
@@ -69,6 +74,10 @@ ansible-galaxy collection install -r ansible-meerkat/requirements.yml
    ```bash
    ansible -i ansible-meerkat/inventory.ini access_points -m ping -k
    ```
+   > If Python is missing on the AP, prefer:
+   > ```bash
+   > ansible -i ansible-meerkat/inventory.ini access_points -m ansible.builtin.raw -a 'echo ok' -k
+   > ```
 4. Run playbook:
    ```bash
    ansible-playbook -i ansible-meerkat/inventory.ini ansible-meerkat/setup_flint3_ap.yml -k
