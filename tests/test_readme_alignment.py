@@ -75,9 +75,14 @@ class TestReadmeAlignment(unittest.TestCase):
 
     def test_garage_wan_pppoe_policy(self):
         self.assertIn("garage_wan_proto: 'pppoe'", NETWORK_VARS)
+        self.assertIn("garage_wan_vlan_tag: '911'", NETWORK_VARS)
         self.assertIn("vault_garage_wan_pppoe_username", README)
         self.assertIn("vault_garage_wan_pppoe_password", README)
+        self.assertIn("VLAN tag: **911**", README)
+        self.assertIn("uci set network.wan_vlan='device'", ROUTER_GARAGE)
+        self.assertIn("uci set network.wan_vlan.vid='{{ garage_wan_vlan_tag_effective }}'", ROUTER_GARAGE)
         self.assertIn("uci set network.wan.proto='pppoe'", ROUTER_GARAGE)
+        self.assertIn("uci set network.wan.device=\"$wan_vlan_dev\"", ROUTER_GARAGE)
         self.assertIn("uci set network.wan.username='{{ garage_wan_pppoe_username_effective }}'", ROUTER_GARAGE)
         self.assertIn("uci set network.wan.password='{{ garage_wan_pppoe_password_effective }}'", ROUTER_GARAGE)
 

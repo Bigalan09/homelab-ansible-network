@@ -21,6 +21,7 @@
       - "10.20.0.0/24"
     garage_wan_proto_default: "pppoe"
     garage_wan_pppoe_mtu_default: "1492"
+    garage_wan_vlan_tag_default: "911"
 
   tasks:
     - name: Resolve garage Wi-Fi policy
@@ -33,6 +34,8 @@
         tailscale_auth_key_effective: "{{ tailscale_auth_key | default('') }}"
         garage_wan_proto_effective: "{{ garage_wan_proto | default(garage_wan_proto_default) }}"
         garage_wan_pppoe_mtu_effective: "{{ garage_wan_pppoe_mtu | default(garage_wan_pppoe_mtu_default) }}"
+        garage_wan_vlan_tag_effective: "{{ garage_wan_vlan_tag | default(garage_wan_vlan_tag_default) }}"
+        garage_wan_parent_if_effective: "{{ garage_wan_parent_if | default('') }}"
         garage_wan_pppoe_service_effective: "{{ garage_wan_pppoe_service | default('') }}"
         garage_wan_pppoe_username_effective: "{{ garage_wan_pppoe_username | default(vault_garage_wan_pppoe_username | default('')) }}"
         garage_wan_pppoe_password_effective: "{{ garage_wan_pppoe_password | default(vault_garage_wan_pppoe_password | default('')) }}"
@@ -42,10 +45,12 @@
         that:
           - garage_wan_pppoe_username_effective | length > 0
           - garage_wan_pppoe_password_effective | length > 0
+          - garage_wan_vlan_tag_effective | length > 0
         fail_msg: >-
-          garage_wan_proto is pppoe but PPPoE credentials are missing.
+          garage_wan_proto is pppoe but PPPoE requirements are missing.
           Set vault_garage_wan_pppoe_username and
-          vault_garage_wan_pppoe_password in group_vars/all/vault.yml.
+          vault_garage_wan_pppoe_password in group_vars/all/vault.yml,
+          and set garage_wan_vlan_tag (e.g. 911) in network.yml.
       when: garage_wan_proto_effective == "pppoe"
 
     - name: Set router hostname and timezone
@@ -67,7 +72,31 @@
         uci set network.lan.ipaddr='{{ lan_ip }}'
         uci set network.lan.netmask='{{ lan_netmask }}'
 
-    - name: Configure WAN PPPoE
+    - name: Configure WAN VLAN device for PPPoE
+      ansible.builtin.raw: |
+        current_wan_dev="$(uci -q get network.wan.device || true)"
+        wan_parent='{{ garage_wan_parent_if_effective }}'
+        if [ -z "$wan_parent" ]; then
+          if [ -n "$current_wan_dev" ]; then
+            case "$current_wan_dev" in
+              *.*) wan_parent="${current_wan_dev%%.*}" ;;
+              *) wan_parent="$current_wan_dev" ;;
+            esac
+          else
+            wan_parent='eth1'
+          fi
+        fi
+        wan_vlan_dev="${wan_parent}.{{ garage_wan_vlan_tag_effective }}"
+        uci -q delete network.wan_vlan
+        uci set network.wan_vlan='device'
+        uci set network.wan_vlan.type='8021q'
+        uci set network.wan_vlan.ifname="$wan_parent"
+        uci set network.wan_vlan.vid='{{ garage_wan_vlan_tag_effective }}'
+        uci set network.wan_vlan.name="$wan_vlan_dev"
+        uci set network.wan.device="$wan_vlan_dev"
+      when: garage_wan_proto_effective == "pppoe"
+
+    - name: Configure WAN PPPoE credentials and behavior
       ansible.builtin.raw: |
         uci set network.wan.proto='pppoe'
         uci set network.wan.username='{{ garage_wan_pppoe_username_effective }}'

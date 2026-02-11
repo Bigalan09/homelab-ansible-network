@@ -55,6 +55,19 @@ ansible-galaxy collection install -r ansible-meerkat/requirements.yml
 - Add WAN PPPoE secrets in Vault:
   - `vault_garage_wan_pppoe_username`
   - `vault_garage_wan_pppoe_password`
+- Set garage WAN VLAN tag in `network.yml` (default in repo: `garage_wan_vlan_tag: '911'`).
+
+```bash
+# safest way to update secrets (decrypts in editor, then re-encrypts on save)
+ansible-vault edit ansible-meerkat/group_vars/all/vault.yml
+
+# read without writing plaintext to disk
+ansible-vault view ansible-meerkat/group_vars/all/vault.yml
+
+# temporary full decrypt/re-encrypt workflow
+ansible-vault decrypt ansible-meerkat/group_vars/all/vault.yml
+ansible-vault encrypt ansible-meerkat/group_vars/all/vault.yml
+```
 
 ```bash
 ansible-vault encrypt ansible-meerkat/group_vars/all/vault.yml
@@ -93,7 +106,7 @@ or
    ```bash
    ansible-playbook -i ansible-meerkat/inventory.ini ansible-meerkat/setup_router_garage.yml -k --ask-vault-pass -e ansible_host=192.168.8.1
    ```
-4. The playbook configures garage WAN as PPPoE (using vault credentials), renames garage SSIDs to `homelab_garage_mngmt`, disables 2.4/5 GHz radios after VLAN/firewall configuration, and attempts to configure Tailscale as an exit node.
+4. The playbook configures garage WAN as PPPoE on VLAN `911` (using vault credentials), renames garage SSIDs to `homelab_garage_mngmt`, disables 2.4/5 GHz radios after VLAN/firewall configuration, and attempts to configure Tailscale as an exit node.
 5. Reconnect your workstation so it can reach the new router IP (`10.1.0.1`).
 
 ### 0.5 Configure Router Office (AP) from factory defaults
@@ -190,6 +203,7 @@ If desired, replace `-k` with SSH keys once initial provisioning is complete.
     * *Enable DHCP Server for all.*
 3.  **WAN:**
     * Protocol: **PPPoE**.
+    * VLAN tag: **911** (`garage_wan_vlan_tag`).
     * Credentials: sourced from Ansible Vault (`vault_garage_wan_pppoe_username` / `vault_garage_wan_pppoe_password`).
 
 ### **Firewall Zones**

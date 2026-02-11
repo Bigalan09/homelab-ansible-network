@@ -11,7 +11,7 @@ This repository now codifies the README network intent directly in Ansible tasks
 
 - Router Garage gateway baseline now includes:
   - management IP (`10.1.0.1/24`),
-  - WAN configured for PPPoE using Vault-provided credentials,
+  - WAN configured for PPPoE on VLAN `911` using Vault-provided credentials,
   - routed VLAN interfaces (`10`, `20`, `30`, `99`) on `br-lan.<vlan>`,
   - DHCP scopes for each routed VLAN,
   - firewall zones and forwarding rules,
