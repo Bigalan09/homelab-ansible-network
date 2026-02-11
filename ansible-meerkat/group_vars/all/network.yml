@@ -95,3 +95,60 @@ forwarding_rules:
   - { src: 'server_zone', dest: 'wan' }
   - { src: 'iot_zone', dest: 'wan' }
   - { src: 'guest_zone', dest: 'wan' }
+
+
+# --- AdGuard Home (garage router) ---
+adguard_enable: false
+adguard_admin_port: 3000
+adguard_dns_port: 53
+adguard_upstream_dns:
+  - 'https://dns10.quad9.net/dns-query'
+  - 'https://1.1.1.1/dns-query'
+adguard_bootstrap_dns:
+  - '9.9.9.9'
+  - '1.1.1.1'
+
+# --- WireGuard + VLAN policy routing (garage router) ---
+# Enable once you populate credentials in Vault and endpoint details below.
+wireguard_policy_enable: false
+wireguard_policy_connections:
+  - name: 'surfshark_london'
+    private_key: "{{ vault_wireguard_private_key_london | default('') }}"
+    endpoint_host: 'uk-lon.prod.surfshark.com'
+    endpoint_port: 51820
+    public_key: "{{ vault_wireguard_public_key_london | default('') }}"
+    preshared_key: "{{ vault_wireguard_preshared_key_london | default('') }}"
+    allowed_ips:
+      - '0.0.0.0/0'
+    addresses:
+      - '10.14.0.2/16'
+  - name: 'surfshark_amsterdam'
+    private_key: "{{ vault_wireguard_private_key_amsterdam | default('') }}"
+    endpoint_host: 'nl-ams.prod.surfshark.com'
+    endpoint_port: 51820
+    public_key: "{{ vault_wireguard_public_key_amsterdam | default('') }}"
+    preshared_key: "{{ vault_wireguard_preshared_key_amsterdam | default('') }}"
+    allowed_ips:
+      - '0.0.0.0/0'
+    addresses:
+      - '10.15.0.2/16'
+
+# Map local VLAN subnets to specific VPN tunnels.
+# Example: IoT (TVs) to Amsterdam, everyone else to London.
+wireguard_policy_vlan_map:
+  - name: 'iot_to_amsterdam'
+    vlan_zone: 'iot_zone'
+    subnet: '10.30.0.0/24'
+    connection_name: 'surfshark_amsterdam'
+  - name: 'trusted_to_london'
+    vlan_zone: 'trusted_zone'
+    subnet: '10.20.0.0/24'
+    connection_name: 'surfshark_london'
+  - name: 'servers_to_london'
+    vlan_zone: 'server_zone'
+    subnet: '10.10.0.0/24'
+    connection_name: 'surfshark_london'
+  - name: 'guest_to_london'
+    vlan_zone: 'guest_zone'
+    subnet: '10.99.0.0/24'
+    connection_name: 'surfshark_london'

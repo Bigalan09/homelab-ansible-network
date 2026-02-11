@@ -1,0 +1,18 @@
+---
+# Generic OpenWrt AdGuard Home role defaults.
+adguard_enable_default: false
+adguard_package_candidates_default:
+  - adguardhome
+  - adguardhome-standalone
+adguard_admin_bind_host_default: "0.0.0.0"
+adguard_admin_port_default: 3000
+adguard_dns_bind_hosts_default:
+  - "0.0.0.0"
+adguard_dns_port_default: 53
+adguard_upstream_dns_default:
+  - "https://dns10.quad9.net/dns-query"
+  - "https://1.1.1.1/dns-query"
+adguard_bootstrap_dns_default:
+  - "9.9.9.9"
+  - "1.1.1.1"
+adguard_disable_dnsmasq_dns_default: true

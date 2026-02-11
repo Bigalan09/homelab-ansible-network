@@ -1,0 +1,156 @@
+---
+- name: Resolve adguard settings
+  ansible.builtin.set_fact:
+    adguard_enable_effective: "{{ adguard_enable | default(adguard_enable_default) }}"
+    adguard_package_candidates_effective: "{{ adguard_package_candidates | default(adguard_package_candidates_default) }}"
+    adguard_admin_bind_host_effective: "{{ adguard_admin_bind_host | default(adguard_admin_bind_host_default) }}"
+    adguard_admin_port_effective: "{{ adguard_admin_port | default(adguard_admin_port_default) }}"
+    adguard_dns_bind_hosts_effective: "{{ adguard_dns_bind_hosts | default(adguard_dns_bind_hosts_default) }}"
+    adguard_dns_port_effective: "{{ adguard_dns_port | default(adguard_dns_port_default) }}"
+    adguard_upstream_dns_effective: "{{ adguard_upstream_dns | default(adguard_upstream_dns_default) }}"
+    adguard_bootstrap_dns_effective: "{{ adguard_bootstrap_dns | default(adguard_bootstrap_dns_default) }}"
+    adguard_disable_dnsmasq_dns_effective: "{{ adguard_disable_dnsmasq_dns | default(adguard_disable_dnsmasq_dns_default) }}"
+
+- name: Install AdGuard Home package (best effort)
+  ansible.builtin.raw: |
+    if [ ! -x /etc/init.d/AdGuardHome ] && [ ! -x /usr/bin/AdGuardHome ]; then
+      opkg update
+      installed=0
+      for pkg in {{ adguard_package_candidates_effective | join(' ') }}; do
+        if opkg install "$pkg"; then
+          installed=1
+          break
+        fi
+      done
+      if [ "$installed" -eq 0 ]; then
+        echo "Failed to install any AdGuard package candidate." >&2
+        exit 12
+      fi
+    fi
+  when: adguard_enable_effective | bool
+  register: adguard_install_result
+  failed_when: false
+
+- name: Create AdGuard Home config directory
+  ansible.builtin.raw: |
+    mkdir -p /etc/AdGuardHome
+  when: adguard_enable_effective | bool
+
+- name: Render AdGuard Home config
+  ansible.builtin.raw: |
+    cat > /etc/AdGuardHome/AdGuardHome.yaml <<'CFG'
+    bind_host: {{ adguard_admin_bind_host_effective }}
+    bind_port: {{ adguard_admin_port_effective }}
+    users: []
+    auth_attempts: 5
+    block_auth_min: 15
+    http_proxy: ""
+    language: ""
+    debug_pprof: false
+    web_session_ttl: 720
+    dns:
+      bind_hosts:
+    {% for host in adguard_dns_bind_hosts_effective %}
+        - {{ host | to_json }}
+    {% endfor %}
+      port: {{ adguard_dns_port_effective }}
+      anonymize_client_ip: false
+      ratelimit: 20
+      ratelimit_subnet_len_ipv4: 24
+      ratelimit_subnet_len_ipv6: 56
+      refuse_any: true
+      upstream_dns:
+    {% for upstream in adguard_upstream_dns_effective %}
+        - {{ upstream | to_json }}
+    {% endfor %}
+      bootstrap_dns:
+    {% for bootstrap in adguard_bootstrap_dns_effective %}
+        - {{ bootstrap | to_json }}
+    {% endfor %}
+      protection_enabled: true
+      filtering_enabled: true
+    filters: []
+    user_rules: []
+    dhcp:
+      enabled: false
+    tls:
+      enabled: false
+    log:
+      file: ""
+      max_backups: 0
+      max_size: 100
+      max_age: 3
+      compress: false
+      local_time: false
+      verbose: false
+    os:
+      group: ""
+      user: ""
+      rlimit_nofile: 0
+    schema_version: 29
+    CFG
+  when: adguard_enable_effective | bool
+
+- name: Disable DNS serving in dnsmasq and advertise local DNS via DHCP
+  ansible.builtin.raw: |
+    if [ "{{ adguard_disable_dnsmasq_dns_effective | bool | lower }}" = "true" ]; then
+      uci set dhcp.@dnsmasq[0].port='0'
+      uci set dhcp.lan.dhcp_option='6,{{ lan_ip }}'
+      {% for vlan in vlans %}
+      uci -q set dhcp.vlan{{ vlan.id }}.dhcp_option='6,{{ vlan.ip }}'
+      {% endfor %}
+      uci commit dhcp
+      /etc/init.d/dnsmasq restart || /etc/init.d/dnsmasq start
+    fi
+  when: adguard_enable_effective | bool
+
+- name: Allow DNS from all VLAN zones to local router
+  ansible.builtin.raw: |
+    {% for vlan in vlans %}
+    uci -q delete firewall.allow_dns_{{ vlan.name }}
+    uci set firewall.allow_dns_{{ vlan.name }}='rule'
+    uci set firewall.allow_dns_{{ vlan.name }}.name='Allow DNS from {{ vlan.name }} to router'
+    uci set firewall.allow_dns_{{ vlan.name }}.src='{{ vlan.zone }}'
+    uci set firewall.allow_dns_{{ vlan.name }}.dest_port='{{ adguard_dns_port_effective }}'
+    uci set firewall.allow_dns_{{ vlan.name }}.proto='tcp udp'
+    uci set firewall.allow_dns_{{ vlan.name }}.target='ACCEPT'
+    {% endfor %}
+
+    uci -q delete firewall.allow_dns_lan
+    uci set firewall.allow_dns_lan='rule'
+    uci set firewall.allow_dns_lan.name='Allow DNS from LAN to router'
+    uci set firewall.allow_dns_lan.src='lan'
+    uci set firewall.allow_dns_lan.dest_port='{{ adguard_dns_port_effective }}'
+    uci set firewall.allow_dns_lan.proto='tcp udp'
+    uci set firewall.allow_dns_lan.target='ACCEPT'
+
+    uci -q delete firewall.allow_adguard_admin
+    uci set firewall.allow_adguard_admin='rule'
+    uci set firewall.allow_adguard_admin.name='Allow AdGuard admin UI from trusted VLAN'
+    uci set firewall.allow_adguard_admin.src='trusted_zone'
+    uci set firewall.allow_adguard_admin.dest_port='{{ adguard_admin_port_effective }}'
+    uci set firewall.allow_adguard_admin.proto='tcp'
+    uci set firewall.allow_adguard_admin.target='ACCEPT'
+
+    uci commit firewall
+    /etc/init.d/firewall restart
+  when: adguard_enable_effective | bool
+
+- name: Enable and restart AdGuard Home service (best effort)
+  ansible.builtin.raw: |
+    if [ -x /etc/init.d/AdGuardHome ]; then
+      /etc/init.d/AdGuardHome enable
+      /etc/init.d/AdGuardHome restart || /etc/init.d/AdGuardHome start
+    elif [ -x /usr/bin/AdGuardHome ]; then
+      nohup /usr/bin/AdGuardHome -c /etc/AdGuardHome/AdGuardHome.yaml -w /var/lib/AdGuardHome >/dev/null 2>&1 &
+    fi
+  when: adguard_enable_effective | bool
+  register: adguard_service_result
+  failed_when: false
+
+- name: Show AdGuard status hint
+  ansible.builtin.debug:
+    msg: >-
+      AdGuard role executed. Open http://{{ lan_ip }}:{{ adguard_admin_port_effective }}
+      from trusted network to complete admin setup if required.
+  when: adguard_enable_effective | bool

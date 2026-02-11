@@ -1,3 +1,5 @@
 ---
 - ansible.builtin.import_playbook: components/router_garage_core.yml
 - ansible.builtin.import_playbook: components/router_garage_tailscale.yml
+- ansible.builtin.import_playbook: components/router_garage_adguard.yml
+- ansible.builtin.import_playbook: components/router_garage_wireguard.yml
