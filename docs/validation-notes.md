@@ -22,6 +22,11 @@ This repository now codifies the README network intent directly in Ansible tasks
   - best-effort Tailscale provisioning (install/start + advertise exit node and subnet routes).
   - optional Tailscale OAuth flow to mint an auth key during playbook execution.
 
+
+- Optional garage components were added for:
+  - AdGuard Home DNS filtering/delegation (disabled by default),
+  - WireGuard multi-endpoint VPN with per-VLAN policy routing (disabled by default).
+
 - Router Office AP baseline now includes:
   - AP management IP (`10.1.0.4`), gateway and DNS (`10.1.0.1`),
   - DHCP disabled on AP LAN,

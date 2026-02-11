@@ -1,0 +1,18 @@
+---
+# Generic OpenWrt WireGuard + policy-based routing defaults.
+wireguard_policy_enable_default: false
+wireguard_policy_package_list_default:
+  - wireguard-tools
+  - kmod-wireguard
+  - luci-proto-wireguard
+  - vpn-policy-routing
+wireguard_policy_zone_name_default: "vpn"
+wireguard_policy_zone_input_default: "REJECT"
+wireguard_policy_zone_output_default: "ACCEPT"
+wireguard_policy_zone_forward_default: "REJECT"
+wireguard_policy_supported_default: true
+wireguard_policy_connections_default: []
+wireguard_policy_vlan_map_default: []
+wireguard_policy_default_dns_default:
+  - "162.252.172.57"
+  - "149.154.159.92"

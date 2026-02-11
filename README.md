@@ -27,7 +27,9 @@ ansible-meerkat/
 │       ├── router_garage_core.yml
 │       ├── router_garage_tailscale.yml
 │       ├── router_office_ap_core.yml
-│       └── router_office_ap_tailscale.yml
+│       ├── router_office_ap_tailscale.yml
+│       ├── router_garage_adguard.yml
+│       └── router_garage_wireguard.yml
 └── roles/
     ├── router_garage/
     │   ├── defaults/main.yml
@@ -40,10 +42,37 @@ ansible-meerkat/
     ├── router_office_ap/
     │   ├── defaults/main.yml
     │   └── tasks/main.yml
-    └── tailscale_openwrt/
+    ├── tailscale_openwrt/
+    │   ├── defaults/main.yml
+    │   └── tasks/main.yml
+    ├── adguard_home_openwrt/
+    │   ├── defaults/main.yml
+    │   └── tasks/main.yml
+    └── wireguard_policy_openwrt/
         ├── defaults/main.yml
         └── tasks/main.yml
 ```
+
+
+
+## 0.1 Optional components added (AdGuard + WireGuard policy routing)
+
+The garage playbook now includes two disabled-by-default components:
+
+- **AdGuard Home** (`adguard_home_openwrt` role):
+  - Installs AdGuard Home, renders baseline config, optionally disables DNS in `dnsmasq`,
+    and pushes DHCP DNS options so VLAN clients use local router DNS.
+  - Adds firewall rules to allow DNS (`53/tcp+udp`) from each VLAN zone and
+    restricts AdGuard admin UI (`:3000`) to `trusted_zone` by default.
+
+- **WireGuard policy routing** (`wireguard_policy_openwrt` role):
+  - Installs WireGuard + `vpn-policy-routing` packages and defines multiple WG tunnels
+    (example Surfshark London + Amsterdam).
+  - Supports per-VLAN egress policies so e.g. IoT can use Amsterdam while other VLANs use London.
+
+Both are controlled from `ansible-meerkat/group_vars/all/network.yml`:
+- `adguard_enable: false` (set true to apply),
+- `wireguard_policy_enable: false` (set true to apply after filling Vault secrets).
 
 ## 0. Factory-Reset to Ansible (GL.iNet + `community.openwrt`)
 
@@ -205,6 +234,36 @@ ssh root@10.1.0.4 "uci show dhcp.lan"
 If desired, replace `-k` with SSH keys once initial provisioning is complete.
 
 ---
+
+
+
+## VPN architecture feasibility notes (per-VLAN Surfshark locations)
+
+Yes, per-VLAN VPN egress is possible on OpenWrt with policy-based routing:
+
+1. Bring up multiple WireGuard interfaces (one per location/provider endpoint).
+2. Attach them to a dedicated firewall zone (e.g. `vpn`).
+3. Use `vpn-policy-routing` policies to map source subnets to a specific WG interface.
+
+Example mapping supported by the new vars in this repo:
+- `10.30.0.0/24` (IoT VLAN) -> `wg_surfshark_amsterdam`
+- `10.20.0.0/24`, `10.10.0.0/24`, `10.99.0.0/24` -> `wg_surfshark_london`
+
+### Caveats
+- Some OpenWrt builds use package name `pbr` instead of `vpn-policy-routing`.
+- Multiple full-tunnel peers (`0.0.0.0/0`) can conflict if policy rules are incomplete.
+- Throughput depends heavily on router CPU + WireGuard acceleration support.
+
+### “API-like” location switching without router login
+
+The easiest path is to make location changes in Ansible vars and run a component playbook:
+
+```bash
+ansible-playbook -i ansible-meerkat/inventory.ini ansible-meerkat/playbooks/components/router_garage_wireguard.yml --ask-vault-pass
+```
+
+If you want true one-click switching, you can expose a small CI job (GitHub Actions/Jenkins)
+that updates `wireguard_policy_vlan_map` and runs the same playbook.
 
 ## 1. Network Topology
 

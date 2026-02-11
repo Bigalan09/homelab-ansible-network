@@ -13,6 +13,10 @@ GARAGE_DEFAULTS = (ROOT / "ansible-meerkat" / "roles" / "router_garage" / "defau
 OFFICE_DEFAULTS = (ROOT / "ansible-meerkat" / "roles" / "router_office_ap" / "defaults" / "main.yml").read_text(encoding="utf-8")
 TAILSCALE_ROLE_TASKS = (ROOT / "ansible-meerkat" / "roles" / "tailscale_openwrt" / "tasks" / "main.yml").read_text(encoding="utf-8")
 TAILSCALE_ROLE_DEFAULTS = (ROOT / "ansible-meerkat" / "roles" / "tailscale_openwrt" / "defaults" / "main.yml").read_text(encoding="utf-8")
+ADGUARD_ROLE_TASKS = (ROOT / "ansible-meerkat" / "roles" / "adguard_home_openwrt" / "tasks" / "main.yml").read_text(encoding="utf-8")
+ADGUARD_ROLE_DEFAULTS = (ROOT / "ansible-meerkat" / "roles" / "adguard_home_openwrt" / "defaults" / "main.yml").read_text(encoding="utf-8")
+WIREGUARD_ROLE_TASKS = (ROOT / "ansible-meerkat" / "roles" / "wireguard_policy_openwrt" / "tasks" / "main.yml").read_text(encoding="utf-8")
+WIREGUARD_ROLE_DEFAULTS = (ROOT / "ansible-meerkat" / "roles" / "wireguard_policy_openwrt" / "defaults" / "main.yml").read_text(encoding="utf-8")
 GARAGE_TASKS = "\n".join(
     (ROOT / "ansible-meerkat" / "roles" / "router_garage" / "tasks" / name).read_text(encoding="utf-8")
     for name in [
@@ -113,6 +117,16 @@ class TestReadmeAlignment(unittest.TestCase):
         self.assertIn("https://api.tailscale.com/api/v2/tailnet/{{ tailscale_oauth_tailnet_effective }}/keys", TAILSCALE_ROLE_TASKS)
         self.assertIn("tailscale_advertise_routes:", NETWORK_VARS)
         self.assertIn("tailscale_oauth_tags:", NETWORK_VARS)
+
+    def test_optional_adguard_and_wireguard_components_are_wired(self):
+        self.assertIn("import_playbook: components/router_garage_adguard.yml", ROUTER_GARAGE_PLAYBOOK)
+        self.assertIn("import_playbook: components/router_garage_wireguard.yml", ROUTER_GARAGE_PLAYBOOK)
+        self.assertIn("adguard_enable: false", NETWORK_VARS)
+        self.assertIn("wireguard_policy_enable: false", NETWORK_VARS)
+        self.assertIn("adguard_enable_default: false", ADGUARD_ROLE_DEFAULTS)
+        self.assertIn("wireguard_policy_enable_default: false", WIREGUARD_ROLE_DEFAULTS)
+        self.assertIn("AdGuardHome.yaml", ADGUARD_ROLE_TASKS)
+        self.assertIn("vpn-policy-routing", WIREGUARD_ROLE_TASKS)
 
     def test_garage_wan_pppoe_policy(self):
         self.assertIn("garage_wan_proto: 'pppoe'", NETWORK_VARS)
