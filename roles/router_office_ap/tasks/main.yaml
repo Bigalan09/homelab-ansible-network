@@ -32,26 +32,100 @@
 
 - name: Configure country code and reset wifi-iface sections
   ansible.builtin.raw: |
-    uci -q set wireless.radio0.country='{{ network_wifi_country_effective }}'
-    uci -q set wireless.radio1.country='{{ network_wifi_country_effective }}'
-    uci -q set wireless.radio2.country='{{ network_wifi_country_effective }}'
-    idx=0
-    while uci -q get wireless.@wifi-iface[$idx] >/dev/null 2>&1; do
-      uci -q delete wireless.@wifi-iface[$idx]
+    wifi_devices="$(uci -q show wireless | sed -n "s/^wireless\\.\\([^.=]*\\)=wifi-device$/\\1/p")"
+    for dev in $wifi_devices; do
+      uci -q set wireless."$dev".country='{{ network_wifi_country_effective }}'
+      uci -q set wireless."$dev".disabled='0'
+    done
+    wifi_iface_sections="$(uci -q show wireless | sed -n "s/^wireless\\.\\([^.@][^.=]*\\)=wifi-iface$/\\1/p")"
+    for iface in $wifi_iface_sections; do
+      uci -q delete wireless."$iface"
+    done
+    while uci -q get wireless.@wifi-iface[0] >/dev/null 2>&1; do
+      uci -q delete wireless.@wifi-iface[0]
     done
 
-- name: Create SSID to VLAN mappings from vars
+- name: Create named SSID to VLAN mappings from vars
   ansible.builtin.raw: |
+    wifi_devices="$(uci -q show wireless | sed -n "s/^wireless\\.\\([^.=]*\\)=wifi-device$/\\1/p")"
+    first_dev="$(printf '%s\n' "$wifi_devices" | sed -n '1p')"
+    second_dev="$(printf '%s\n' "$wifi_devices" | sed -n '2p')"
+    mtk_like_device=0
+    dev_2g=''
+    dev_5g=''
+    dev_6g=''
+    for dev in $wifi_devices; do
+      if printf '%s\n' "$dev" | grep -Eq '^mt[0-9]+'; then
+        mtk_like_device=1
+      fi
+      band="$(uci -q get wireless."$dev".band || true)"
+      case "$band" in
+        2g) [ -z "$dev_2g" ] && dev_2g="$dev" ;;
+        5g) [ -z "$dev_5g" ] && dev_5g="$dev" ;;
+        6g) [ -z "$dev_6g" ] && dev_6g="$dev" ;;
+      esac
+    done
+    mtk_2g_idx=0
+    mtk_5g_idx=0
+    mtk_6g_idx=0
+    is_wifi_device() {
+      [ -n "${1:-}" ] || return 1
+      uci -q show wireless."$1" 2>/dev/null | grep -q "^wireless\\.$1=wifi-device$"
+    }
+
     {% for ssid in office_ap_ssids_effective %}
-    uci add wireless wifi-iface >/dev/null
-    uci set wireless.@wifi-iface[-1].device='{{ ssid.device }}'
-    uci set wireless.@wifi-iface[-1].mode='ap'
-    uci set wireless.@wifi-iface[-1].network='ap_vlan{{ ssid.vlan_id }}'
-    uci set wireless.@wifi-iface[-1].ssid='{{ ssid.ssid }}'
-    uci set wireless.@wifi-iface[-1].encryption='{{ ssid.encryption }}'
-    uci set wireless.@wifi-iface[-1].key='{{ ssid.key }}'
+    requested_dev='{{ ssid.device }}'
+    resolved_dev="$requested_dev"
+
+    if ! is_wifi_device "$resolved_dev"; then
+      case "$requested_dev" in
+        radio0) resolved_dev="${dev_2g:-$first_dev}" ;;
+        radio1) resolved_dev="${dev_5g:-$second_dev}" ;;
+        radio2) resolved_dev="$dev_6g" ;;
+      esac
+    fi
+
+    if ! is_wifi_device "$resolved_dev"; then
+      echo "Skipping SSID '{{ ssid.name }}': wireless device '$requested_dev' not found." >&2
+      uci -q delete wireless.{{ ssid.name }}
+      continue
+    fi
+
+    uci -q delete wireless.{{ ssid.name }}
+    uci set wireless.{{ ssid.name }}='wifi-iface'
+    uci set wireless.{{ ssid.name }}.device="$resolved_dev"
+    uci set wireless.{{ ssid.name }}.mode='ap'
+    uci set wireless.{{ ssid.name }}.network='ap_vlan{{ ssid.vlan_id }}'
+    uci set wireless.{{ ssid.name }}.ssid='{{ ssid.ssid }}'
+    uci set wireless.{{ ssid.name }}.encryption='{{ ssid.encryption }}'
+    uci set wireless.{{ ssid.name }}.key='{{ ssid.key }}'
+    uci set wireless.{{ ssid.name }}.disabled='0'
+    if [ "$mtk_like_device" -eq 1 ]; then
+      band="$(uci -q get wireless."$resolved_dev".band || true)"
+      case "$band" in
+        2g)
+          uci set wireless.{{ ssid.name }}.ifname="ra${mtk_2g_idx}"
+          mtk_2g_idx=$((mtk_2g_idx + 1))
+          ;;
+        5g)
+          uci set wireless.{{ ssid.name }}.ifname="rax${mtk_5g_idx}"
+          mtk_5g_idx=$((mtk_5g_idx + 1))
+          ;;
+        6g)
+          uci set wireless.{{ ssid.name }}.ifname="rai${mtk_6g_idx}"
+          mtk_6g_idx=$((mtk_6g_idx + 1))
+          ;;
+        *)
+          uci -q delete wireless.{{ ssid.name }}.ifname
+          ;;
+      esac
+    else
+      uci -q delete wireless.{{ ssid.name }}.ifname
+    fi
     {% if ssid.isolate is defined %}
-    uci set wireless.@wifi-iface[-1].isolate='{{ ssid.isolate }}'
+    uci set wireless.{{ ssid.name }}.isolate='{{ ssid.isolate }}'
+    {% else %}
+    uci -q delete wireless.{{ ssid.name }}.isolate
     {% endif %}
     {% endfor %}
 
@@ -64,6 +138,6 @@
 
 - name: Reload OpenWrt services
   ansible.builtin.raw: |
-    /etc/init.d/network reload
-    wifi reload
+    /etc/init.d/network restart || /etc/init.d/network reload
+    wifi reload || wifi
     /etc/init.d/dnsmasq restart

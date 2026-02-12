@@ -11,3 +11,4 @@ Use this directory to record architecture decisions as numbered ADRs.
 ## Current ADRs
 
 - `0001-standardize-layout.md`
+- `0002-architecture-change-requires-adr-refresh.md`

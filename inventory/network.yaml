@@ -10,7 +10,7 @@ network:
       - radio0
       - radio1
     test_mode:
-      enabled: true
+      enabled: false
       repeater:
         network: wwan
         radio: radio1
@@ -62,12 +62,6 @@ network:
         vlan_id: 20
         key: "{{ vault_wifi_key_manor }}"
         device: radio1
-        encryption: sae
-      - name: manor_6g
-        ssid: Meerkat Manor
-        vlan_id: 20
-        key: "{{ vault_wifi_key_manor }}"
-        device: radio2
         encryption: sae
       - name: iot_2g
         ssid: Meerkat IoT
