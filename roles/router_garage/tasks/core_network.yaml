@@ -101,7 +101,38 @@
     uci set wireless.sta.mode='sta'
     uci set wireless.sta.network='{{ garage_test_repeater_network_effective }}'
     uci set wireless.sta.ssid={{ garage_test_repeater_ssid_effective | quote }}
-    uci set wireless.sta.encryption='{{ garage_test_repeater_encryption_effective }}'
+    scan_encryption=''
+    scan_line="$(iwinfo "$selected_radio" scan 2>/dev/null | awk '
+      BEGIN { found=0 }
+      /ESSID: / {
+        if (index($0, "\"{{ garage_test_repeater_ssid_effective }}\"") > 0) {
+          found=1
+        } else {
+          found=0
+        }
+      }
+      found && /Encryption:/ {
+        print
+        exit
+      }
+    ' || true)"
+    if printf '%s\n' "$scan_line" | grep -qi 'WPA3'; then
+      scan_encryption='sae'
+    elif printf '%s\n' "$scan_line" | grep -qi 'WPA2'; then
+      scan_encryption='psk2'
+    fi
+
+    selected_encryption='{{ garage_test_repeater_encryption_effective }}'
+    if [ -n "$scan_encryption" ]; then
+      selected_encryption="$scan_encryption"
+    fi
+
+    fallback_encryptions='{{ garage_test_repeater_encryptions_effective | join(" ") }}'
+    if [ -n "$fallback_encryptions" ] && ! printf '%s\n' "$fallback_encryptions" | tr ' ' '\n' | grep -Fx "$selected_encryption" >/dev/null 2>&1; then
+      selected_encryption="$(printf '%s\n' "$fallback_encryptions" | awk '{print $1}')"
+    fi
+
+    uci set wireless.sta.encryption="$selected_encryption"
     uci set wireless.sta.disabled='0'
     uci -q delete wireless.sta.wds
 
@@ -228,4 +259,3 @@
   become: false
   changed_when: false
   when: garage_test_mode_effective | bool
-
