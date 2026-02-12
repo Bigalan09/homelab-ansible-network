@@ -1,3 +1,0 @@
----
-# Backwards-compatible wrapper. Prefer playbooks/router_garage.yml.
-- ansible.builtin.import_playbook: playbooks/router_garage.yml

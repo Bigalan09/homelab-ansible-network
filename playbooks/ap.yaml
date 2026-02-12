@@ -1,0 +1,10 @@
+---
+- name: Configure office access point baseline
+  hosts: access_points
+  become: false
+  gather_facts: false
+  vars_files:
+    - ../inventory/network.yaml
+    - ../inventory/vault.yaml
+  roles:
+    - router_office_ap

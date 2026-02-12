@@ -1,0 +1,10 @@
+---
+- name: Configure AdGuard Home on gateway router
+  hosts: gateway
+  become: false
+  gather_facts: false
+  vars_files:
+    - ../inventory/network.yaml
+    - ../inventory/vault.yaml
+  roles:
+    - adguard_home_openwrt

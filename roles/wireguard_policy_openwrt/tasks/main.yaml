@@ -1,0 +1,144 @@
+---
+- name: Resolve wireguard policy settings
+  ansible.builtin.set_fact:
+    wireguard_policy_enable_effective: "{{ wireguard_policy_enable | default(services.wireguard_policy.enabled | default(wireguard_policy_enable_default)) }}"
+    wireguard_policy_package_list_effective: "{{ wireguard_policy_package_list | default(wireguard_policy_package_list_default) }}"
+    wireguard_policy_zone_name_effective: "{{ wireguard_policy_zone_name | default(wireguard_policy_zone_name_default) }}"
+    wireguard_policy_zone_input_effective: "{{ wireguard_policy_zone_input | default(wireguard_policy_zone_input_default) }}"
+    wireguard_policy_zone_output_effective: "{{ wireguard_policy_zone_output | default(wireguard_policy_zone_output_default) }}"
+    wireguard_policy_zone_forward_effective: "{{ wireguard_policy_zone_forward | default(wireguard_policy_zone_forward_default) }}"
+    wireguard_policy_connections_effective: "{{ wireguard_policy_connections | default(services.wireguard_policy.connections | default(wireguard_policy_connections_default)) }}"
+    wireguard_policy_vlan_map_effective: "{{ wireguard_policy_vlan_map | default(services.wireguard_policy.vlan_map | default(wireguard_policy_vlan_map_default)) }}"
+    wireguard_policy_default_dns_effective: "{{ wireguard_policy_default_dns | default(wireguard_policy_default_dns_default) }}"
+
+- name: Validate wireguard policy connections have required fields
+  ansible.builtin.assert:
+    that:
+      - item.name is defined
+      - item.private_key is defined
+      - item.endpoint_host is defined
+      - item.endpoint_port is defined
+      - item.public_key is defined
+      - item.allowed_ips is defined
+      - (item.allowed_ips | length) > 0
+    fail_msg: >-
+      Each wireguard_policy_connections entry must define: name, private_key,
+      endpoint_host, endpoint_port, public_key, and allowed_ips.
+  loop: "{{ wireguard_policy_connections_effective }}"
+  when: wireguard_policy_enable_effective | bool
+  no_log: true
+
+- name: Install wireguard and policy-routing packages (best effort)
+  ansible.builtin.raw: |
+    if [ "{{ wireguard_policy_enable_effective | bool | lower }}" = "true" ]; then
+      opkg update
+      for pkg in {{ wireguard_policy_package_list_effective | join(' ') }}; do
+        opkg install "$pkg" || true
+      done
+    fi
+  when: wireguard_policy_enable_effective | bool
+  register: wireguard_policy_install_result
+  failed_when: false
+
+- name: Configure wireguard interfaces and peers
+  ansible.builtin.raw: |
+    {% for conn in wireguard_policy_connections_effective %}
+    uci -q delete network.wg_{{ conn.name }}
+    uci set network.wg_{{ conn.name }}='interface'
+    uci set network.wg_{{ conn.name }}.proto='wireguard'
+    uci set network.wg_{{ conn.name }}.private_key={{ conn.private_key | quote }}
+    {% if conn.addresses is defined and conn.addresses | length > 0 %}
+    uci set network.wg_{{ conn.name }}.addresses='{{ conn.addresses | join(' ') }}'
+    {% endif %}
+    {% if conn.mtu is defined %}
+    uci set network.wg_{{ conn.name }}.mtu='{{ conn.mtu }}'
+    {% endif %}
+
+    uci -q delete network.wg_{{ conn.name }}_peer
+    uci set network.wg_{{ conn.name }}_peer='wireguard_wg_{{ conn.name }}'
+    uci set network.wg_{{ conn.name }}_peer.public_key={{ conn.public_key | quote }}
+    {% if conn.preshared_key is defined %}
+    uci set network.wg_{{ conn.name }}_peer.preshared_key={{ conn.preshared_key | quote }}
+    {% endif %}
+    uci set network.wg_{{ conn.name }}_peer.endpoint_host={{ conn.endpoint_host | quote }}
+    uci set network.wg_{{ conn.name }}_peer.endpoint_port='{{ conn.endpoint_port }}'
+    uci set network.wg_{{ conn.name }}_peer.allowed_ips='{{ conn.allowed_ips | join(' ') }}'
+    uci set network.wg_{{ conn.name }}_peer.route_allowed_ips='1'
+    uci set network.wg_{{ conn.name }}_peer.persistent_keepalive='25'
+    {% endfor %}
+
+    uci commit network
+  when: wireguard_policy_enable_effective | bool
+  no_log: true
+
+- name: Configure firewall vpn zone and forwardings
+  ansible.builtin.raw: |
+    uci -q delete firewall.{{ wireguard_policy_zone_name_effective }}
+    uci set firewall.{{ wireguard_policy_zone_name_effective }}='zone'
+    uci set firewall.{{ wireguard_policy_zone_name_effective }}.name='{{ wireguard_policy_zone_name_effective }}'
+    uci set firewall.{{ wireguard_policy_zone_name_effective }}.input='{{ wireguard_policy_zone_input_effective }}'
+    uci set firewall.{{ wireguard_policy_zone_name_effective }}.output='{{ wireguard_policy_zone_output_effective }}'
+    uci set firewall.{{ wireguard_policy_zone_name_effective }}.forward='{{ wireguard_policy_zone_forward_effective }}'
+
+    {% for conn in wireguard_policy_connections_effective %}
+    uci add_list firewall.{{ wireguard_policy_zone_name_effective }}.network='wg_{{ conn.name }}'
+    {% endfor %}
+
+    idx=0
+    while uci -q get firewall.forwarding[$idx] >/dev/null 2>&1; do
+      if [ "$(uci -q get firewall.forwarding[$idx].dest)" = "{{ wireguard_policy_zone_name_effective }}" ]; then
+        uci -q delete firewall.forwarding[$idx]
+        continue
+      fi
+      idx=$((idx+1))
+    done
+
+    {% for mapping in wireguard_policy_vlan_map_effective %}
+    uci add firewall forwarding >/dev/null
+    uci set firewall.@forwarding[-1].src='{{ mapping.vlan_zone }}'
+    uci set firewall.@forwarding[-1].dest='{{ wireguard_policy_zone_name_effective }}'
+    {% endfor %}
+
+    uci commit firewall
+    /etc/init.d/firewall restart
+  when: wireguard_policy_enable_effective | bool
+
+- name: Configure vpn-policy-routing policies per VLAN mapping
+  ansible.builtin.raw: |
+    uci -q delete vpn-policy-routing.config
+    uci set vpn-policy-routing.config='config'
+    uci set vpn-policy-routing.config.enabled='1'
+    uci set vpn-policy-routing.config.strict_enforcement='1'
+    uci set vpn-policy-routing.config.verbosity='2'
+    uci set vpn-policy-routing.config.ipv6_enabled='0'
+    uci -q delete vpn-policy-routing.config.dest_dns
+    {% for dns_ip in wireguard_policy_default_dns_effective %}
+    uci add_list vpn-policy-routing.config.dest_dns='{{ dns_ip }}'
+    {% endfor %}
+
+    {% for mapping in wireguard_policy_vlan_map_effective %}
+    uci -q delete vpn-policy-routing.{{ mapping.name }}
+    uci set vpn-policy-routing.{{ mapping.name }}='policy'
+    uci set vpn-policy-routing.{{ mapping.name }}.name='{{ mapping.name }}'
+    uci set vpn-policy-routing.{{ mapping.name }}.interface='wg_{{ mapping.connection_name }}'
+    uci set vpn-policy-routing.{{ mapping.name }}.src_addr='{{ mapping.subnet }}'
+    {% endfor %}
+
+    uci commit vpn-policy-routing
+    /etc/init.d/vpn-policy-routing enable || true
+    /etc/init.d/vpn-policy-routing restart || /etc/init.d/vpn-policy-routing start || true
+  when: wireguard_policy_enable_effective | bool
+
+- name: Restart network for wireguard changes (best effort)
+  ansible.builtin.raw: |
+    /etc/init.d/network restart || /etc/init.d/network reload
+  when: wireguard_policy_enable_effective | bool
+  register: wireguard_network_restart_result
+  failed_when: false
+
+- name: Show wireguard policy routing hint
+  ansible.builtin.debug:
+    msg: >-
+      WireGuard role executed. If your OpenWrt target does not provide vpn-policy-routing,
+      use pbr package naming or mwan3 alternatives for per-VLAN egress policy.
+  when: wireguard_policy_enable_effective | bool

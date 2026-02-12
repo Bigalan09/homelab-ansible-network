@@ -1,0 +1,69 @@
+---
+- name: Resolve office AP network settings
+  ansible.builtin.set_fact:
+    office_ap_ip_effective: "{{ ap_ip }}"
+    office_ap_netmask_effective: "{{ ap_netmask }}"
+    office_ap_gateway_effective: "{{ ap_gateway }}"
+    network_vlans_effective: "{{ vlans | default(network.vlans) }}"
+    network_wifi_country_effective: "{{ wifi_country | default(network.wifi.country) }}"
+    office_ap_ssids_effective: "{{ ssids | default(network.office_ap.ssids) }}"
+
+- name: Set AP hostname and static management network
+  ansible.builtin.raw: |
+    uci set system.@system[0].hostname='router-office'
+    uci set network.lan.proto='static'
+    uci set network.lan.ipaddr='{{ office_ap_ip_effective }}'
+    uci set network.lan.netmask='{{ office_ap_netmask_effective }}'
+    uci set network.lan.gateway='{{ office_ap_gateway_effective }}'
+    uci set network.lan.dns='{{ office_ap_gateway_effective }}'
+
+- name: Disable DHCP server on AP LAN
+  ansible.builtin.raw: |
+    uci set dhcp.lan.ignore='1'
+
+- name: Build VLAN bridge interfaces for AP SSID backhaul
+  ansible.builtin.raw: |
+    {% for vlan in network_vlans_effective %}
+    uci -q delete network.ap_vlan{{ vlan.id }}
+    uci set network.ap_vlan{{ vlan.id }}='interface'
+    uci set network.ap_vlan{{ vlan.id }}.proto='none'
+    uci set network.ap_vlan{{ vlan.id }}.device='br-lan.{{ vlan.id }}'
+    {% endfor %}
+
+- name: Configure country code and reset wifi-iface sections
+  ansible.builtin.raw: |
+    uci -q set wireless.radio0.country='{{ network_wifi_country_effective }}'
+    uci -q set wireless.radio1.country='{{ network_wifi_country_effective }}'
+    uci -q set wireless.radio2.country='{{ network_wifi_country_effective }}'
+    idx=0
+    while uci -q get wireless.@wifi-iface[$idx] >/dev/null 2>&1; do
+      uci -q delete wireless.@wifi-iface[$idx]
+    done
+
+- name: Create SSID to VLAN mappings from vars
+  ansible.builtin.raw: |
+    {% for ssid in office_ap_ssids_effective %}
+    uci add wireless wifi-iface >/dev/null
+    uci set wireless.@wifi-iface[-1].device='{{ ssid.device }}'
+    uci set wireless.@wifi-iface[-1].mode='ap'
+    uci set wireless.@wifi-iface[-1].network='ap_vlan{{ ssid.vlan_id }}'
+    uci set wireless.@wifi-iface[-1].ssid='{{ ssid.ssid }}'
+    uci set wireless.@wifi-iface[-1].encryption='{{ ssid.encryption }}'
+    uci set wireless.@wifi-iface[-1].key='{{ ssid.key }}'
+    {% if ssid.isolate is defined %}
+    uci set wireless.@wifi-iface[-1].isolate='{{ ssid.isolate }}'
+    {% endif %}
+    {% endfor %}
+
+- name: Commit UCI changes
+  ansible.builtin.raw: |
+    uci commit system
+    uci commit network
+    uci commit dhcp
+    uci commit wireless
+
+- name: Reload OpenWrt services
+  ansible.builtin.raw: |
+    /etc/init.d/network reload
+    wifi reload
+    /etc/init.d/dnsmasq restart

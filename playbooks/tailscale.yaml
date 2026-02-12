@@ -1,0 +1,10 @@
+---
+- name: Configure tailscale on gateway router
+  hosts: gateway
+  become: false
+  gather_facts: false
+  vars_files:
+    - ../inventory/network.yaml
+    - ../inventory/vault.yaml
+  roles:
+    - tailscale_openwrt

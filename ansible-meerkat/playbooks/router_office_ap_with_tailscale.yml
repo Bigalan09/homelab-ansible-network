@@ -1,3 +1,0 @@
----
-- ansible.builtin.import_playbook: components/router_office_ap_core.yml
-- ansible.builtin.import_playbook: components/router_office_ap_tailscale.yml
