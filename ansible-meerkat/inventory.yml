@@ -1,0 +1,18 @@
+all:
+  vars:
+    ansible_user: root
+    ansible_connection: ssh
+    ansible_ssh_common_args: "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+  children:
+    routers:
+      hosts:
+        router-garage:
+          ansible_host: 10.1.0.1
+        router-office:
+          ansible_host: 192.168.8.1
+    gateway:
+      hosts:
+        router-garage:
+    access_points:
+      hosts:
+        router-office:

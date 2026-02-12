@@ -1,14 +1,14 @@
 ---
 - name: Resolve wireguard policy settings
   ansible.builtin.set_fact:
-    wireguard_policy_enable_effective: "{{ wireguard_policy_enable | default(wireguard_policy_enable_default) }}"
+    wireguard_policy_enable_effective: "{{ wireguard_policy_enable | default(services.wireguard_policy.enabled | default(wireguard_policy_enable_default)) }}"
     wireguard_policy_package_list_effective: "{{ wireguard_policy_package_list | default(wireguard_policy_package_list_default) }}"
     wireguard_policy_zone_name_effective: "{{ wireguard_policy_zone_name | default(wireguard_policy_zone_name_default) }}"
     wireguard_policy_zone_input_effective: "{{ wireguard_policy_zone_input | default(wireguard_policy_zone_input_default) }}"
     wireguard_policy_zone_output_effective: "{{ wireguard_policy_zone_output | default(wireguard_policy_zone_output_default) }}"
     wireguard_policy_zone_forward_effective: "{{ wireguard_policy_zone_forward | default(wireguard_policy_zone_forward_default) }}"
-    wireguard_policy_connections_effective: "{{ wireguard_policy_connections | default(wireguard_policy_connections_default) }}"
-    wireguard_policy_vlan_map_effective: "{{ wireguard_policy_vlan_map | default(wireguard_policy_vlan_map_default) }}"
+    wireguard_policy_connections_effective: "{{ wireguard_policy_connections | default(services.wireguard_policy.connections | default(wireguard_policy_connections_default)) }}"
+    wireguard_policy_vlan_map_effective: "{{ wireguard_policy_vlan_map | default(services.wireguard_policy.vlan_map | default(wireguard_policy_vlan_map_default)) }}"
     wireguard_policy_default_dns_effective: "{{ wireguard_policy_default_dns | default(wireguard_policy_default_dns_default) }}"
 
 - name: Validate wireguard policy connections have required fields

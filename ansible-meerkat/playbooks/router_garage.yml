@@ -1,5 +1,8 @@
 ---
-- ansible.builtin.import_playbook: components/router_garage_core.yml
-- ansible.builtin.import_playbook: components/router_garage_tailscale.yml
-- ansible.builtin.import_playbook: components/router_garage_adguard.yml
-- ansible.builtin.import_playbook: components/router_garage_wireguard.yml
+- name: Configure garage router
+  hosts: gateway
+  become: false
+  gather_facts: false
+  tasks:
+    - name: Include garage component taskfile
+      ansible.builtin.import_tasks: tasks/router_garage.yml

@@ -1,2 +1,8 @@
 ---
-- ansible.builtin.import_playbook: components/router_office_ap_core.yml
+- name: Configure office router/AP
+  hosts: access_points
+  become: false
+  gather_facts: false
+  tasks:
+    - name: Include office AP core component taskfile
+      ansible.builtin.import_tasks: tasks/router_office_ap_core.yml

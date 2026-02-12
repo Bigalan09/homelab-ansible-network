@@ -1,14 +1,14 @@
 ---
 - name: Resolve adguard settings
   ansible.builtin.set_fact:
-    adguard_enable_effective: "{{ adguard_enable | default(adguard_enable_default) }}"
+    adguard_enable_effective: "{{ adguard_enable | default(services.adguard.enabled | default(adguard_enable_default)) }}"
     adguard_package_candidates_effective: "{{ adguard_package_candidates | default(adguard_package_candidates_default) }}"
     adguard_admin_bind_host_effective: "{{ adguard_admin_bind_host | default(adguard_admin_bind_host_default) }}"
-    adguard_admin_port_effective: "{{ adguard_admin_port | default(adguard_admin_port_default) }}"
+    adguard_admin_port_effective: "{{ adguard_admin_port | default(services.adguard.admin_port | default(adguard_admin_port_default)) }}"
     adguard_dns_bind_hosts_effective: "{{ adguard_dns_bind_hosts | default(adguard_dns_bind_hosts_default) }}"
-    adguard_dns_port_effective: "{{ adguard_dns_port | default(adguard_dns_port_default) }}"
-    adguard_upstream_dns_effective: "{{ adguard_upstream_dns | default(adguard_upstream_dns_default) }}"
-    adguard_bootstrap_dns_effective: "{{ adguard_bootstrap_dns | default(adguard_bootstrap_dns_default) }}"
+    adguard_dns_port_effective: "{{ adguard_dns_port | default(services.adguard.dns_port | default(adguard_dns_port_default)) }}"
+    adguard_upstream_dns_effective: "{{ adguard_upstream_dns | default(services.adguard.upstream_dns | default(adguard_upstream_dns_default)) }}"
+    adguard_bootstrap_dns_effective: "{{ adguard_bootstrap_dns | default(services.adguard.bootstrap_dns | default(adguard_bootstrap_dns_default)) }}"
     adguard_disable_dnsmasq_dns_effective: "{{ adguard_disable_dnsmasq_dns | default(adguard_disable_dnsmasq_dns_default) }}"
 
 - name: Install AdGuard Home package (best effort)
@@ -96,7 +96,7 @@
     if [ "{{ adguard_disable_dnsmasq_dns_effective | bool | lower }}" = "true" ]; then
       uci set dhcp.@dnsmasq[0].port='0'
       uci set dhcp.lan.dhcp_option='6,{{ lan_ip }}'
-      {% for vlan in vlans %}
+      {% for vlan in (vlans | default(network.vlans)) %}
       uci -q set dhcp.vlan{{ vlan.id }}.dhcp_option='6,{{ vlan.ip }}'
       {% endfor %}
       uci commit dhcp
@@ -106,7 +106,7 @@
 
 - name: Allow DNS from all VLAN zones to local router
   ansible.builtin.raw: |
-    {% for vlan in vlans %}
+    {% for vlan in (vlans | default(network.vlans)) %}
     uci -q delete firewall.allow_dns_{{ vlan.name }}
     uci set firewall.allow_dns_{{ vlan.name }}='rule'
     uci set firewall.allow_dns_{{ vlan.name }}.name='Allow DNS from {{ vlan.name }} to router'

@@ -14,7 +14,7 @@ The Ansible project has been split into reusable roles for easier debugging and 
 
 ```text
 ansible-meerkat/
-├── inventory.ini
+├── inventory.yml
 ├── group_vars/
 │   └── all/
 │       ├── network.yml
@@ -23,13 +23,10 @@ ansible-meerkat/
 │   ├── router_garage.yml
 │   ├── router_office_ap.yml
 │   ├── router_office_ap_with_tailscale.yml
-│   └── components/
-│       ├── router_garage_core.yml
-│       ├── router_garage_tailscale.yml
+│   └── tasks/
+│       ├── router_garage.yml
 │       ├── router_office_ap_core.yml
-│       ├── router_office_ap_tailscale.yml
-│       ├── router_garage_adguard.yml
-│       └── router_garage_wireguard.yml
+│       └── router_office_ap_tailscale.yml
 └── roles/
     ├── router_garage/
     │   ├── defaults/main.yml
@@ -71,15 +68,15 @@ The garage playbook now includes two disabled-by-default components:
   - Supports per-VLAN egress policies so e.g. IoT can use Amsterdam while other VLANs use London.
 
 Both are controlled from `ansible-meerkat/group_vars/all/network.yml`:
-- `adguard_enable: false` (set true to apply),
-- `wireguard_policy_enable: false` (set true to apply after filling Vault secrets).
+- `services.adguard.enabled: false` (set true to apply),
+- `services.wireguard_policy.enabled: false` (set true to apply after filling Vault secrets).
 
 ## 0. Factory-Reset to Ansible (GL.iNet + `community.openwrt`)
 
 This section is the **direct path** from a factory-reset GL.iNet router to a working Ansible run using the official OpenWrt collection:
 
 - Collection: <https://galaxy.ansible.com/ui/repo/published/community/openwrt/>
-- Playbooks in this repo: `ansible-meerkat/playbooks/router_garage.yml`, `ansible-meerkat/playbooks/router_office_ap.yml`, and `ansible-meerkat/playbooks/router_office_ap_with_tailscale.yml` (legacy wrapper playbooks remain for backwards compatibility).
+- Playbooks in this repo: `ansible-meerkat/playbooks/router_garage.yml`, `ansible-meerkat/playbooks/router_office_ap.yml`, and `ansible-meerkat/playbooks/router_office_ap_with_tailscale.yml`.
 
 ### 0.1 Preconditions
 
@@ -128,7 +125,7 @@ ansible-galaxy collection install -r ansible-meerkat/requirements.yml
 - Add Tailscale OAuth secrets in Vault (if using OAuth instead of a static auth key):
   - `vault_tailscale_oauth_client_id`
   - `vault_tailscale_oauth_client_secret`
-- Set garage WAN VLAN tag in `network.yml` (default in repo: `garage_wan_vlan_tag: '911'`).
+- Set garage WAN VLAN tag in `network.yml` (default in repo: `network.garage.wan.pppoe.vlan_tag: '911'`).
 
 ```bash
 # safest way to update secrets (decrypts in editor, then re-encrypts on save)
@@ -148,13 +145,13 @@ OAuth notes:
 - OAuth tags should allow `tag:router-garage` (configurable via `tailscale_oauth_tags`) and must be permitted by your tailnet ACL `tagOwners`.
 
 Test mode notes:
-- Set `garage_test_mode: true` in `ansible-meerkat/group_vars/all/network.yml`.
+- Set `network.garage.test_mode.enabled: true` in `ansible-meerkat/group_vars/all/network.yml`.
 - In test mode, the router joins your upstream Wi-Fi as repeater uplink (`wwan`) and keeps Wi-Fi radios enabled so internet remains available for Tailscale.
 - In test mode, PPPoE WAN configuration is skipped.
-- In test mode, repeater config defaults to `garage_test_repeater_radio: 'radio1'` and `garage_test_repeater_encryption: 'sae'` (5 GHz + WPA3). The playbook also scans candidate radios and picks the first one that sees your configured repeater SSID.
-- In test mode, uplink validation waits up to `garage_test_uplink_wait_seconds` (default `90`) and polls every `garage_test_uplink_poll_interval_seconds` (default `5`) before failing.
+- In test mode, repeater config defaults to `network.garage.test_mode.repeater.radio: 'radio1'` and `network.garage.test_mode.repeater.encryption: 'sae'` (5 GHz + WPA3). The playbook also scans candidate radios and picks the first one that sees your configured repeater SSID.
+- In test mode, uplink validation waits up to `network.garage.test_mode.uplink_wait_seconds` (default `90`) and polls every `network.garage.test_mode.uplink_poll_interval_seconds` (default `5`) before failing.
 - In test mode, the playbook verifies repeater uplink internet (`8.8.8.8`/`1.1.1.1`) and control-plane reachability to `login.tailscale.com` + `api.tailscale.com`; if those fail, the run fails fast.
-- In live/prod mode (`garage_test_mode: false`), radios can be disabled after WAN/internet checks pass.
+- In live/prod mode (`network.garage.test_mode.enabled: false`), radios can be disabled after WAN/internet checks pass.
 
 ```bash
 ansible-vault encrypt ansible-meerkat/group_vars/all/vault.yml
@@ -173,7 +170,7 @@ or
 ```
 
 SSH bootstrap note:
-- `ansible-meerkat/inventory.ini` sets `ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'` for lab convenience, so factory resets do not require cleaning `~/.ssh/known_hosts`.
+- `ansible-meerkat/inventory.yml` sets `ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'` for lab convenience, so factory resets do not require cleaning `~/.ssh/known_hosts`.
 
 ### 0.4 Configure Router Garage (gateway) from factory defaults
 
@@ -185,20 +182,20 @@ SSH bootstrap note:
    > ```
 2. Check SSH connectivity:
    ```bash
-   ansible -i ansible-meerkat/inventory.ini gateway -m ping -k -e ansible_host=192.168.8.1
+   ansible -i ansible-meerkat/inventory.yml gateway -m ping -k -e ansible_host=192.168.8.1
    ```
    > `ansible.builtin.ping` is a Python-based test module and expects a Python interpreter on the target.
    > OpenWrt/GL.iNet images often do not ship with Python, so use a raw SSH check instead when bootstrapping:
    > ```bash
-   > ansible -i ansible-meerkat/inventory.ini gateway -m ansible.builtin.raw -a 'echo ok' -k -e ansible_host=192.168.8.1
+   > ansible -i ansible-meerkat/inventory.yml gateway -m ansible.builtin.raw -a 'echo ok' -k -e ansible_host=192.168.8.1
    > ```
 3. Run playbook:
    ```bash
-   ansible-playbook -i ansible-meerkat/inventory.ini ansible-meerkat/playbooks/router_garage.yml -k --ask-vault-pass -e ansible_host=192.168.8.1
+   ansible-playbook -i ansible-meerkat/inventory.yml ansible-meerkat/playbooks/router_garage.yml -k --ask-vault-pass -e ansible_host=192.168.8.1
    ```
 4. The playbook configures garage WAN as PPPoE on VLAN `911` (using vault credentials) when not in test mode, renames garage SSIDs to `homelab_garage_mngmt`, and runs the reusable Tailscale component configured for exit-node + route advertisements.
    - Live/prod mode: disables 2.4/5 GHz radios only after WAN + internet are confirmed up.
-   - Test mode (`garage_test_mode: true`): configures Wi-Fi repeater uplink and keeps radios enabled.
+   - Test mode (`network.garage.test_mode.enabled: true`): configures Wi-Fi repeater uplink and keeps radios enabled.
 5. Reconnect your workstation so it can reach the new router IP (`10.1.0.1`).
 
 ### 0.5 Configure Router Office (AP) from factory defaults
@@ -207,19 +204,19 @@ SSH bootstrap note:
 2. Factory reset Router Office and connect to it at `192.168.8.1`.
 3. Check SSH connectivity:
    ```bash
-   ansible -i ansible-meerkat/inventory.ini access_points -m ping -k
+   ansible -i ansible-meerkat/inventory.yml access_points -m ping -k
    ```
    > If Python is missing on the AP, prefer:
    > ```bash
-   > ansible -i ansible-meerkat/inventory.ini access_points -m ansible.builtin.raw -a 'echo ok' -k
+   > ansible -i ansible-meerkat/inventory.yml access_points -m ansible.builtin.raw -a 'echo ok' -k
    > ```
 4. Run core AP playbook:
    ```bash
-   ansible-playbook -i ansible-meerkat/inventory.ini ansible-meerkat/playbooks/router_office_ap.yml -k --ask-vault-pass
+   ansible-playbook -i ansible-meerkat/inventory.yml ansible-meerkat/playbooks/router_office_ap.yml -k --ask-vault-pass
    ```
    Optional: join Office AP to tailnet without advertising exit-node/routes:
    ```bash
-   ansible-playbook -i ansible-meerkat/inventory.ini ansible-meerkat/playbooks/router_office_ap_with_tailscale.yml -k --ask-vault-pass
+   ansible-playbook -i ansible-meerkat/inventory.yml ansible-meerkat/playbooks/router_office_ap_with_tailscale.yml -k --ask-vault-pass
    ```
 5. After playbook, office AP host should be reachable at `10.1.0.4`.
 
@@ -259,7 +256,7 @@ Example mapping supported by the new vars in this repo:
 The easiest path is to make location changes in Ansible vars and run a component playbook:
 
 ```bash
-ansible-playbook -i ansible-meerkat/inventory.ini ansible-meerkat/playbooks/components/router_garage_wireguard.yml --ask-vault-pass
+ansible-playbook -i ansible-meerkat/inventory.yml ansible-meerkat/playbooks/router_garage.yml --tags wireguard --ask-vault-pass
 ```
 
 If you want true one-click switching, you can expose a small CI job (GitHub Actions/Jenkins)
@@ -329,7 +326,7 @@ that updates `wireguard_policy_vlan_map` and runs the same playbook.
     * *Enable DHCP Server for all.*
 3.  **WAN:**
     * Protocol: **PPPoE**.
-    * VLAN tag: **911** (`garage_wan_vlan_tag`).
+    * VLAN tag: **911** (`network.garage.wan.pppoe.vlan_tag`).
     * Credentials: sourced from Ansible Vault (`vault_garage_wan_pppoe_username` / `vault_garage_wan_pppoe_password`).
 
 ### **Firewall Zones**

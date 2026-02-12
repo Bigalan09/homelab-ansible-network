@@ -124,7 +124,7 @@
 
 - name: Ensure VLAN interfaces exist
   ansible.builtin.raw: |
-    {% for vlan in vlans %}
+    {% for vlan in network_vlans_effective %}
     uci -q delete network.vlan{{ vlan.id }}
     uci set network.vlan{{ vlan.id }}='interface'
     uci set network.vlan{{ vlan.id }}.proto='static'
@@ -135,7 +135,7 @@
 
 - name: Ensure DHCP pools exist for routed VLANs
   ansible.builtin.raw: |
-    {% for vlan in vlans %}
+    {% for vlan in network_vlans_effective %}
     uci -q delete dhcp.vlan{{ vlan.id }}
     uci set dhcp.vlan{{ vlan.id }}='dhcp'
     uci set dhcp.vlan{{ vlan.id }}.interface='vlan{{ vlan.id }}'
@@ -146,7 +146,7 @@
 
 - name: Configure firewall zones for VLANs
   ansible.builtin.raw: |
-    {% for vlan in vlans %}
+    {% for vlan in network_vlans_effective %}
     uci -q delete firewall.{{ vlan.zone }}
     uci set firewall.{{ vlan.zone }}='zone'
     uci set firewall.{{ vlan.zone }}.name='{{ vlan.zone }}'
@@ -162,7 +162,7 @@
     while uci -q get firewall.forwarding[$idx] >/dev/null 2>&1; do
       uci -q delete firewall.forwarding[$idx]
     done
-    {% for rule in forwarding_rules %}
+    {% for rule in network_forwarding_rules_effective %}
     uci add firewall forwarding >/dev/null
     uci set firewall.@forwarding[-1].src='{{ rule.src }}'
     uci set firewall.@forwarding[-1].dest='{{ rule.dest }}'
