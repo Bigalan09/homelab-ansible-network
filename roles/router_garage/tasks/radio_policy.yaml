@@ -15,9 +15,36 @@
 
 - name: Disable garage 2.4/5 GHz radios after WAN/internet confirmation
   ansible.builtin.raw: |
+    wifi_devices="$(uci -q show wireless | sed -n "s/^wireless\\.\\([^.=]*\\)=wifi-device$/\\1/p")"
+    dev_2g=''
+    dev_5g=''
+    dev_6g=''
+    for dev in $wifi_devices; do
+      band="$(uci -q get wireless."$dev".band || true)"
+      case "$band" in
+        2g) [ -z "$dev_2g" ] && dev_2g="$dev" ;;
+        5g) [ -z "$dev_5g" ] && dev_5g="$dev" ;;
+        6g) [ -z "$dev_6g" ] && dev_6g="$dev" ;;
+      esac
+    done
+    resolve_radio() {
+      requested="${1:-}"
+      [ -n "$requested" ] || return 1
+      if uci -q get wireless."$requested" >/dev/null 2>&1; then
+        printf '%s\n' "$requested"
+        return 0
+      fi
+      case "$requested" in
+        radio0) [ -n "$dev_2g" ] && printf '%s\n' "$dev_2g" && return 0 ;;
+        radio1) [ -n "$dev_5g" ] && printf '%s\n' "$dev_5g" && return 0 ;;
+        radio2) [ -n "$dev_6g" ] && printf '%s\n' "$dev_6g" && return 0 ;;
+      esac
+      return 1
+    }
     {% for radio in garage_wifi_radios_to_disable_effective %}
-    if uci -q get wireless.{{ radio }} >/dev/null 2>&1; then
-      uci set wireless.{{ radio }}.disabled='1'
+    resolved_radio="$(resolve_radio '{{ radio }}' || true)"
+    if [ -n "$resolved_radio" ]; then
+      uci set wireless."$resolved_radio".disabled='1'
     fi
     {% endfor %}
   when:

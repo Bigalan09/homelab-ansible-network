@@ -68,26 +68,54 @@
     uci set network.{{ garage_test_repeater_network_effective }}.metric='10'
 
     ssid={{ garage_test_repeater_ssid_effective | quote }}
-    selected_radio='{{ garage_test_repeater_radio_effective }}'
+    wifi_devices="$(uci -q show wireless | sed -n "s/^wireless\\.\\([^.=]*\\)=wifi-device$/\\1/p")"
+    dev_2g=''
+    dev_5g=''
+    dev_6g=''
+    for dev in $wifi_devices; do
+      band="$(uci -q get wireless."$dev".band || true)"
+      case "$band" in
+        2g) [ -z "$dev_2g" ] && dev_2g="$dev" ;;
+        5g) [ -z "$dev_5g" ] && dev_5g="$dev" ;;
+        6g) [ -z "$dev_6g" ] && dev_6g="$dev" ;;
+      esac
+    done
+    resolve_radio() {
+      requested="${1:-}"
+      [ -n "$requested" ] || return 1
+      if uci -q get wireless."$requested" >/dev/null 2>&1; then
+        printf '%s\n' "$requested"
+        return 0
+      fi
+      case "$requested" in
+        radio0) [ -n "$dev_2g" ] && printf '%s\n' "$dev_2g" && return 0 ;;
+        radio1) [ -n "$dev_5g" ] && printf '%s\n' "$dev_5g" && return 0 ;;
+        radio2) [ -n "$dev_6g" ] && printf '%s\n' "$dev_6g" && return 0 ;;
+      esac
+      return 1
+    }
+
+    selected_radio="$(resolve_radio '{{ garage_test_repeater_radio_effective }}' || true)"
     for radio in {{ garage_test_repeater_radios_effective | join(' ') }}; do
-      uci -q get wireless."$radio" >/dev/null 2>&1 || continue
-      if iwinfo "$radio" scan 2>/dev/null | grep -F "ESSID: \"$ssid\"" >/dev/null 2>&1; then
-        selected_radio="$radio"
+      resolved_radio="$(resolve_radio "$radio" || true)"
+      [ -n "$resolved_radio" ] || continue
+      if iwinfo "$resolved_radio" scan 2>/dev/null | grep -F "ESSID: \"$ssid\"" >/dev/null 2>&1; then
+        selected_radio="$resolved_radio"
         break
       fi
     done
-    if ! uci -q get wireless."$selected_radio" >/dev/null 2>&1; then
+    if [ -z "$selected_radio" ] || ! uci -q get wireless."$selected_radio" >/dev/null 2>&1; then
       for radio in {{ garage_test_repeater_radios_effective | join(' ') }}; do
-        if uci -q get wireless."$radio" >/dev/null 2>&1; then
-          selected_radio="$radio"
+        resolved_radio="$(resolve_radio "$radio" || true)"
+        if [ -n "$resolved_radio" ] && uci -q get wireless."$resolved_radio" >/dev/null 2>&1; then
+          selected_radio="$resolved_radio"
           break
         fi
       done
     fi
-    if ! uci -q get wireless."$selected_radio" >/dev/null 2>&1; then
-      selected_radio="$(uci -q show wireless | sed -n "s/^wireless\\.\\([^.=]*\\)=wifi-device$/\\1/p" | head -n 1)"
+    if [ -z "$selected_radio" ] || ! uci -q get wireless."$selected_radio" >/dev/null 2>&1; then
+      selected_radio="$(printf '%s\n' "$wifi_devices" | head -n 1)"
     fi
-    [ -n "$selected_radio" ] || selected_radio='radio0'
     if ! uci -q get wireless."$selected_radio" >/dev/null 2>&1; then
       echo "No usable wifi-device section found in wireless UCI config."
       uci -q show wireless || true
@@ -101,7 +129,38 @@
     uci set wireless.sta.mode='sta'
     uci set wireless.sta.network='{{ garage_test_repeater_network_effective }}'
     uci set wireless.sta.ssid={{ garage_test_repeater_ssid_effective | quote }}
-    uci set wireless.sta.encryption='{{ garage_test_repeater_encryption_effective }}'
+    scan_encryption=''
+    scan_line="$(iwinfo "$selected_radio" scan 2>/dev/null | awk '
+      BEGIN { found=0 }
+      /ESSID: / {
+        if (index($0, "\"{{ garage_test_repeater_ssid_effective }}\"") > 0) {
+          found=1
+        } else {
+          found=0
+        }
+      }
+      found && /Encryption:/ {
+        print
+        exit
+      }
+    ' || true)"
+    if printf '%s\n' "$scan_line" | grep -qi 'WPA3'; then
+      scan_encryption='sae'
+    elif printf '%s\n' "$scan_line" | grep -qi 'WPA2'; then
+      scan_encryption='psk2'
+    fi
+
+    selected_encryption='{{ garage_test_repeater_encryption_effective }}'
+    if [ -n "$scan_encryption" ]; then
+      selected_encryption="$scan_encryption"
+    fi
+
+    fallback_encryptions='{{ garage_test_repeater_encryptions_effective | join(" ") }}'
+    if [ -n "$fallback_encryptions" ] && ! printf '%s\n' "$fallback_encryptions" | tr ' ' '\n' | grep -Fx "$selected_encryption" >/dev/null 2>&1; then
+      selected_encryption="$(printf '%s\n' "$fallback_encryptions" | awk '{print $1}')"
+    fi
+
+    uci set wireless.sta.encryption="$selected_encryption"
     uci set wireless.sta.disabled='0'
     uci -q delete wireless.sta.wds
 
@@ -228,4 +287,3 @@
   become: false
   changed_when: false
   when: garage_test_mode_effective | bool
-

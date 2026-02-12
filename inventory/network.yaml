@@ -3,6 +3,9 @@
 network:
   wifi:
     country: GB
+    channels:
+      "2g": "6"
+      "5g": "36"
 
   garage:
     mgmt_ssid: homelab_garage_mngmt
