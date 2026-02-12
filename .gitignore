@@ -5,3 +5,7 @@ __pycache__/
 # Local plaintext vault password artifacts (do not commit)
 inventory/vault-pass.txt
 inventory/vault-pass.plain
+
+# Local vault artifacts (encrypted/plain) that should remain local
+inventory/vault.yaml
+inventory/vault-pass.enc
