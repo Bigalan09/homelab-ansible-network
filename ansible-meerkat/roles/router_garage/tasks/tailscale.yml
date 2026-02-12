@@ -1,7 +1,0 @@
----
-- name: Legacy garage tailscale task entrypoint
-  ansible.builtin.debug:
-    msg: >-
-      Tailscale tasks were moved to role tailscale_openwrt and split playbook
-      components/router_garage_tailscale.yml. This task file is kept only to
-      avoid breaking older references.

@@ -1,0 +1,10 @@
+---
+- name: Configure WireGuard policy routing on gateway router
+  hosts: gateway
+  become: false
+  gather_facts: false
+  vars_files:
+    - ../inventory/network.yaml
+    - ../inventory/vault.yaml
+  roles:
+    - wireguard_policy_openwrt

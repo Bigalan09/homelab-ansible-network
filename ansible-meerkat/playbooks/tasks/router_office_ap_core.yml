@@ -1,4 +1,0 @@
----
-- name: Apply office AP core baseline
-  ansible.builtin.include_role:
-    name: router_office_ap

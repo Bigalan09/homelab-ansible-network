@@ -1,8 +1,0 @@
----
-- name: Configure garage router
-  hosts: gateway
-  become: false
-  gather_facts: false
-  tasks:
-    - name: Include garage component taskfile
-      ansible.builtin.import_tasks: tasks/router_garage.yml

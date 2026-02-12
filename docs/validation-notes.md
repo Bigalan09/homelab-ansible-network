@@ -6,8 +6,8 @@ This repository now codifies the README network intent directly in Ansible tasks
 
 - Naming is now role-based (`router-garage` and `router-office`) instead of model-based labels.
 - Variables are split into:
-  - `ansible-meerkat/group_vars/all/network.yml` for non-secrets,
-  - `ansible-meerkat/group_vars/all/vault.yml` for secrets (intended for Ansible Vault encryption).
+  - `inventory/network.yaml` for non-secrets,
+  - `inventory/vault.yaml` for secrets (intended for Ansible Vault encryption).
 
 - Router Garage gateway baseline now includes:
   - management IP (`10.1.0.1/24`),

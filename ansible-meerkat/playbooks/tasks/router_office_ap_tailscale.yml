@@ -1,8 +1,0 @@
----
-- name: Apply office AP tailscale profile
-  ansible.builtin.include_role:
-    name: tailscale_openwrt
-  vars:
-    tailscale_hostname: "{{ services.tailscale.office_ap.hostname }}"
-    tailscale_advertise_exit_node: "{{ services.tailscale.office_ap.advertise_exit_node }}"
-    tailscale_advertise_routes: "{{ services.tailscale.office_ap.advertise_routes }}"
