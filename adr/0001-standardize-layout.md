@@ -10,7 +10,7 @@ Adopt a top-level layout with:
 - `dependencies/requirements.yaml`
 - `inventory/{hosts,network,vault}.yaml`
 - `playbooks/*.yaml` with short descriptive names
-- `roles/<role>/{default,tasks,vars}/main.yaml`
+- `roles/<role>/{defaults,tasks,vars}/main.yaml`
 - split documentation in `docs/`
 - ADR tracking in `adr/`
 

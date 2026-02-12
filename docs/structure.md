@@ -2,6 +2,7 @@
 
 ```text
 .
+├── ansible.cfg
 ├── .ansible-lint.yaml
 ├── AGENTS.md
 ├── AI.md
@@ -10,16 +11,23 @@
 ├── inventory/
 │   ├── hosts.yaml
 │   ├── network.yaml
+│   ├── vault-pass.enc
+│   ├── vault.example.yaml
 │   └── vault.yaml
 ├── playbooks/
+│   ├── gateway-core.yaml
 │   ├── gateway-router.yaml
 │   ├── ap.yaml
 │   ├── tailscale.yaml
+│   ├── tailscale-nodes.yaml
 │   ├── adguard.yaml
 │   └── wireguard-policy.yaml
+├── scripts/
+│   ├── vault-pass-encrypt.sh
+│   └── vault-pass-decrypt.sh
 ├── roles/
 │   ├── router_garage/
-│   │   ├── default/main.yaml
+│   │   ├── defaults/main.yaml
 │   │   ├── tasks/main.yaml
 │   │   └── vars/main.yaml
 │   ├── router_office_ap/
@@ -42,4 +50,4 @@
 - New architectural decisions must be documented in `adr/`.
 - New operational guidance belongs in `docs/how-to/`.
 
-- Role pattern: `roles/<role>/{default,tasks,vars}/main.yaml`
+- Role pattern: `roles/<role>/{defaults,tasks,vars}/main.yaml`

@@ -1,21 +1,49 @@
 # How to Run Playbooks
 
-## Gateway router
+## Vault password file workflow (encrypted)
 
 ```bash
-ansible-playbook -i inventory/hosts.yaml playbooks/gateway-router.yaml --ask-vault-pass
+export VAULT_PASS_DECRYPT_KEY='REPLACE_WITH_LOCAL_DECRYPT_KEY'
+./scripts/vault-pass-encrypt.sh
+```
+
+Ansible uses `scripts/vault-pass-decrypt.sh` by default via `ansible.cfg`.
+Override explicitly only if needed:
+
+```bash
+--vault-password-file ./scripts/vault-pass-decrypt.sh
+```
+
+## Gateway router (core only, recommended first)
+
+```bash
+ansible-playbook -i inventory/hosts.yaml playbooks/gateway-core.yaml -e ansible_host=192.168.8.1
+```
+
+## Gateway router (full stack)
+
+```bash
+ansible-playbook -i inventory/hosts.yaml playbooks/gateway-router.yaml
 ```
 
 ## Access point
 
 ```bash
-ansible-playbook -i inventory/hosts.yaml playbooks/ap.yaml --ask-vault-pass
+ansible-playbook -i inventory/hosts.yaml playbooks/ap.yaml
 ```
 
 ## Service-only runs
 
 ```bash
-ansible-playbook -i inventory/hosts.yaml playbooks/tailscale.yaml --ask-vault-pass
-ansible-playbook -i inventory/hosts.yaml playbooks/adguard.yaml --ask-vault-pass
-ansible-playbook -i inventory/hosts.yaml playbooks/wireguard-policy.yaml --ask-vault-pass
+ansible-playbook -i inventory/hosts.yaml playbooks/tailscale.yaml
+ansible-playbook -i inventory/hosts.yaml playbooks/adguard.yaml
+ansible-playbook -i inventory/hosts.yaml playbooks/wireguard-policy.yaml
+```
+
+## Reusable OpenWrt tailscale nodes
+
+Add hosts under `openwrt_tailscale_nodes` in `inventory/hosts.yaml`, then run:
+
+```bash
+ansible-playbook -i inventory/hosts.yaml playbooks/tailscale-nodes.yaml
 ```

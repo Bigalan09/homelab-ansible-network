@@ -1,0 +1,13 @@
+---
+- name: Configure tailscale on reusable OpenWrt nodes
+  hosts: openwrt_tailscale_nodes
+  become: false
+  gather_facts: false
+  vars_files:
+    - ../inventory/network.yaml
+    - ../inventory/vault.yaml
+  vars:
+    tailscale_advertise_exit_node: false
+    tailscale_advertise_routes: []
+  roles:
+    - tailscale_openwrt

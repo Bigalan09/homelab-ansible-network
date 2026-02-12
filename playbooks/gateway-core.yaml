@@ -1,0 +1,10 @@
+---
+- name: Configure gateway router core baseline only
+  hosts: gateway
+  become: false
+  gather_facts: false
+  vars_files:
+    - ../inventory/network.yaml
+    - ../inventory/vault.yaml
+  roles:
+    - router_garage

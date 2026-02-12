@@ -1,1 +1,7 @@
 .DS_Store
+__pycache__/
+*.pyc
+
+# Local plaintext vault password artifacts (do not commit)
+inventory/vault-pass.txt
+inventory/vault-pass.plain

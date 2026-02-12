@@ -16,3 +16,9 @@ all:
     access_points:
       hosts:
         router-office:
+    openwrt_tailscale_nodes:
+      hosts:
+        # travel-router:
+        #   ansible_host: 10.1.0.50
+        # remote-openwrt:
+        #   ansible_host: 10.1.0.51
