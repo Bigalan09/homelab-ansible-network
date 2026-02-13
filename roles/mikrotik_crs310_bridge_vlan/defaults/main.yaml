@@ -1,0 +1,55 @@
+---
+# Default variables for CRS3xx bridge VLAN filtering configuration.
+crs310_bridge_name: bridge
+crs310_uplink_interface: ether1
+crs310_ap_interface: ether2
+crs310_access_interfaces:
+  - ether3
+  - ether4
+  - ether5
+  - ether6
+  - ether7
+  - ether8
+
+crs310_trusted_access_pvid: 10
+crs310_ap_management_pvid: 99
+crs310_uplink_pvid: 1
+
+crs310_vlan_ids:
+  - 10
+  - 20
+  - 30
+  - 40
+  - 50
+  - 99
+
+crs310_tagged_by_vlan:
+  10:
+    - "{{ crs310_uplink_interface }}"
+    - "{{ crs310_ap_interface }}"
+  20:
+    - "{{ crs310_uplink_interface }}"
+    - "{{ crs310_ap_interface }}"
+  30:
+    - "{{ crs310_uplink_interface }}"
+    - "{{ crs310_ap_interface }}"
+  40:
+    - "{{ crs310_uplink_interface }}"
+    - "{{ crs310_ap_interface }}"
+  50:
+    - "{{ crs310_uplink_interface }}"
+    - "{{ crs310_ap_interface }}"
+  99:
+    - "{{ crs310_bridge_name }}"
+    - "{{ crs310_uplink_interface }}"
+    - "{{ crs310_ap_interface }}"
+
+crs310_mgmt_vlan_id: 99
+crs310_mgmt_vlan_interface: vlan99-mgmt
+crs310_mgmt_ip_cidr: 192.168.99.2/24
+crs310_mgmt_gateway: 192.168.99.1
+
+# Timed rollback: if the run fails to complete, RouterOS executes rollback script.
+crs310_rollback_scheduler_name: ansible_crs310_rollback
+crs310_rollback_script_name: ansible_crs310_rollback_script
+crs310_rollback_delay_minutes: 10

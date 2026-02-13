@@ -23,13 +23,15 @@
 │   ├── tailscale.yaml
 │   ├── tailscale-nodes.yaml
 │   ├── adguard.yaml
-│   └── wireguard-policy.yaml
+│   ├── wireguard-policy.yaml
+│   └── crs310-router-on-stick.yaml
 ├── roles/
 │   ├── gateway_router/
 │   ├── ap_repeater/
 │   ├── tailscale_openwrt/
 │   ├── adguard_home_openwrt/
-│   └── wireguard_policy_openwrt/
+│   ├── wireguard_policy_openwrt/
+│   └── mikrotik_crs310_bridge_vlan/
 └── scripts/
     ├── vault-pass-encrypt.sh
     └── vault-pass-decrypt.sh
