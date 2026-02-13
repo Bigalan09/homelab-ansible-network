@@ -1,6 +1,9 @@
 - name: Resolve gateway-router Wi-Fi policy
   ansible.builtin.set_fact:
     gateway_router_mgmt_ssid_effective: "{{ gateway_router_mgmt_ssid | default(network.gateway_router.mgmt_ssid | default(gateway_router_mgmt_ssid_default)) }}"
+    gateway_router_mgmt_encryption_effective: "{{ gateway_router_mgmt_encryption | default(network.gateway_router.mgmt_encryption | default(gateway_router_mgmt_encryption_default)) }}"
+    gateway_router_mgmt_password_effective: "{{ gateway_router_mgmt_password | default(vault_gateway_router_mgmt_password | default('')) }}"
+    gateway_router_mgmt_switch_button_names_effective: "{{ gateway_router_mgmt_switch_button_names | default(network.gateway_router.mgmt_switch_button_names | default(gateway_router_mgmt_switch_button_names_default)) }}"
     gateway_router_wifi_radios_to_disable_effective: "{{ gateway_router_wifi_radios_to_disable | default(network.gateway_router.radios_to_disable | default(gateway_router_wifi_radios_to_disable_default)) }}"
     gateway_router_test_mode_effective: "{{ gateway_router_test_mode | default(network.gateway_router.test_mode.enabled | default(gateway_router_test_mode_default)) }}"
     gateway_router_test_repeater_network_effective: "{{ gateway_router_test_repeater_network | default(network.gateway_router.test_mode.repeater.network | default(gateway_router_test_repeater_network_default)) }}"

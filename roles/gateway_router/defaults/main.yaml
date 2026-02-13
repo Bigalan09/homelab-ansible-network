@@ -3,6 +3,11 @@
 lan_ip: "10.1.0.1"
 lan_netmask: "255.255.255.0"
 gateway_router_mgmt_ssid_default: "homelab_gateway_router_mngmt"
+gateway_router_mgmt_encryption_default: "sae-mixed"
+gateway_router_mgmt_switch_button_names_default:
+  - "BTN_2"
+  - "switch"
+  - "sw1"
 gateway_router_wifi_radios_to_disable_default:
   - radio0
   - radio1

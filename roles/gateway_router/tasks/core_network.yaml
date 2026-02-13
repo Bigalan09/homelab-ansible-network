@@ -4,13 +4,55 @@
     uci set system.@system[0].zonename='Europe/London'
     uci set system.@system[0].timezone='GMT0BST,M3.5.0/1,M10.5.0'
 
-- name: Rename gateway-router Wi-Fi SSIDs to management label
+- name: Rename and secure gateway-router management Wi-Fi SSIDs
   ansible.builtin.raw: |
     idx=0
     while uci -q get wireless.@wifi-iface[$idx] >/dev/null 2>&1; do
       uci set wireless.@wifi-iface[$idx].ssid='{{ gateway_router_mgmt_ssid_effective }}'
+      {% if gateway_router_mgmt_password_effective | length > 0 %}
+      uci set wireless.@wifi-iface[$idx].encryption='{{ gateway_router_mgmt_encryption_effective }}'
+      uci set wireless.@wifi-iface[$idx].key='{{ gateway_router_mgmt_password_effective }}'
+      {% endif %}
       idx=$((idx+1))
     done
+  no_log: true
+
+- name: Install management Wi-Fi toggle scripts for Flint side switch
+  ansible.builtin.raw: |
+    mkdir -p /etc/rc.button
+    {% for btn in gateway_router_mgmt_switch_button_names_effective %}
+    script_path='/etc/rc.button/{{ btn }}'
+    echo '#!/bin/sh' > "$script_path"
+    echo '[ "$ACTION" = "pressed" ] || exit 0' >> "$script_path"
+    echo 'MGMT_SSID={{ gateway_router_mgmt_ssid_effective }}' >> "$script_path"
+    echo 'iface_ids="$(uci -q show wireless | grep -F ".ssid='"'"'""$MGMT_SSID""'"'"'" | sed -n "s/^wireless\.@wifi-iface\[\([0-9]\+\)\]\.ssid='"'"'.*'"'"'$/\1/p")"' >> "$script_path"
+    echo 'if [ -z "$iface_ids" ]; then' >> "$script_path"
+    echo '  logger -t mgmt-wifi-toggle "No wifi-iface section found for SSID '''$MGMT_SSID'''"' >> "$script_path"
+    echo '  exit 0' >> "$script_path"
+    echo 'fi' >> "$script_path"
+    echo 'any_enabled=0' >> "$script_path"
+    echo 'for idx in $iface_ids; do' >> "$script_path"
+    echo '  disabled_val="$(uci -q get wireless.@wifi-iface[$idx].disabled || echo 0)"' >> "$script_path"
+    echo '  if [ "$disabled_val" != "1" ]; then' >> "$script_path"
+    echo '    any_enabled=1' >> "$script_path"
+    echo '    break' >> "$script_path"
+    echo '  fi' >> "$script_path"
+    echo 'done' >> "$script_path"
+    echo 'if [ "$any_enabled" -eq 1 ]; then' >> "$script_path"
+    echo '  new_state="1"' >> "$script_path"
+    echo '  state_label="off"' >> "$script_path"
+    echo 'else' >> "$script_path"
+    echo '  new_state="0"' >> "$script_path"
+    echo '  state_label="on"' >> "$script_path"
+    echo 'fi' >> "$script_path"
+    echo 'for idx in $iface_ids; do' >> "$script_path"
+    echo '  uci set wireless.@wifi-iface[$idx].disabled="$new_state"' >> "$script_path"
+    echo 'done' >> "$script_path"
+    echo 'uci commit wireless' >> "$script_path"
+    echo 'wifi reload >/dev/null 2>&1 || wifi >/dev/null 2>&1' >> "$script_path"
+    echo 'logger -t mgmt-wifi-toggle "Set management SSID '''$MGMT_SSID''' to $state_label"' >> "$script_path"
+    chmod 0755 "$script_path"
+    {% endfor %}
 
 - name: Set LAN management interface
   ansible.builtin.raw: |

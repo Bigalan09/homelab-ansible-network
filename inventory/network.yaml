@@ -8,7 +8,12 @@ network:
       "5g": "36"
 
   gateway_router:
-    mgmt_ssid: homelab_gateway_router_mngmt
+    mgmt_ssid: Gateway Mgmt
+    mgmt_encryption: sae-mixed
+    mgmt_switch_button_names:
+      - BTN_2
+      - switch
+      - sw1
     lan_management_vlan: 99
     radios_to_disable:
       - radio0
@@ -67,7 +72,7 @@ network:
     lan_management_vlan: 99
     ssids:
       - name: trusted_5g
-        ssid: Meerkat Trusted
+        ssid: Meerkat Manor
         vlan_id: 20
         key: "{{ vault_wifi_key_manor }}"
         device: radio1

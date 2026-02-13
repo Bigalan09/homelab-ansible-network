@@ -10,6 +10,10 @@ vault_gateway_router_wan_pppoe_password: "REPLACE_WITH_ISP_PASSWORD"
 vault_gateway_router_test_repeater_ssid: "REPLACE_WITH_UPSTREAM_WIFI_SSID"
 vault_gateway_router_test_repeater_password: "REPLACE_WITH_UPSTREAM_WIFI_PASSWORD"
 
+
+# Gateway management Wi-Fi
+vault_gateway_router_mgmt_password: "REPLACE_WITH_GATEWAY_MGMT_WIFI_PASSWORD"
+
 # AP-repeater Wi-Fi PSKs
 vault_wifi_key_manor: "REPLACE_WITH_MANOR_WIFI_KEY"
 vault_wifi_key_iot: "REPLACE_WITH_IOT_WIFI_KEY"

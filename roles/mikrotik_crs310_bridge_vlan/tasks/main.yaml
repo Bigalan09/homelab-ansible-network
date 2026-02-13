@@ -21,6 +21,10 @@
     crs310_rollback_scheduler_name_effective: "{{ crs310_inventory_settings.get('rollback_scheduler_name', crs310_rollback_scheduler_name) }}"
     crs310_rollback_script_name_effective: "{{ crs310_inventory_settings.get('rollback_script_name', crs310_rollback_script_name) }}"
 
+- name: Build VLAN name lookup for RouterOS comments
+  ansible.builtin.set_fact:
+    crs310_vlan_name_map_effective: "{{ dict((network.vlans | default([])) | map(attribute='id') | map('string') | zip((network.vlans | default([])) | map(attribute='name'))) }}"
+
 - name: Validate CRS310 access port map is not empty
   ansible.builtin.assert:
     that:
@@ -57,22 +61,22 @@
       community.routeros.command:
         commands:
           - >-
-            :if ([:len [/interface bridge port find where bridge="{{ crs310_bridge_name_effective }}" and interface="{{ crs310_uplink_interface_effective }}"]] = 0) do={/interface bridge port add bridge="{{ crs310_bridge_name_effective }}" interface="{{ crs310_uplink_interface_effective }}" pvid={{ crs310_trunk_native_pvid_effective }} ingress-filtering=yes frame-types=admit-all} else={/interface bridge port set [find where bridge="{{ crs310_bridge_name_effective }}" and interface="{{ crs310_uplink_interface_effective }}"] pvid={{ crs310_trunk_native_pvid_effective }} ingress-filtering=yes frame-types=admit-all}
+            :if ([:len [/interface bridge port find where bridge="{{ crs310_bridge_name_effective }}" and interface="{{ crs310_uplink_interface_effective }}"]] = 0) do={/interface bridge port add bridge="{{ crs310_bridge_name_effective }}" interface="{{ crs310_uplink_interface_effective }}" pvid={{ crs310_trunk_native_pvid_effective }} ingress-filtering=yes frame-types=admit-all comment="ansible:uplink-trunk"} else={/interface bridge port set [find where bridge="{{ crs310_bridge_name_effective }}" and interface="{{ crs310_uplink_interface_effective }}"] pvid={{ crs310_trunk_native_pvid_effective }} ingress-filtering=yes frame-types=admit-all comment="ansible:uplink-trunk"}
           - >-
-            :if ([:len [/interface bridge port find where bridge="{{ crs310_bridge_name_effective }}" and interface="{{ crs310_ap_interface_effective }}"]] = 0) do={/interface bridge port add bridge="{{ crs310_bridge_name_effective }}" interface="{{ crs310_ap_interface_effective }}" pvid={{ crs310_trunk_native_pvid_effective }} ingress-filtering=yes frame-types=admit-all} else={/interface bridge port set [find where bridge="{{ crs310_bridge_name_effective }}" and interface="{{ crs310_ap_interface_effective }}"] pvid={{ crs310_trunk_native_pvid_effective }} ingress-filtering=yes frame-types=admit-all}
+            :if ([:len [/interface bridge port find where bridge="{{ crs310_bridge_name_effective }}" and interface="{{ crs310_ap_interface_effective }}"]] = 0) do={/interface bridge port add bridge="{{ crs310_bridge_name_effective }}" interface="{{ crs310_ap_interface_effective }}" pvid={{ crs310_trunk_native_pvid_effective }} ingress-filtering=yes frame-types=admit-all comment="ansible:ap-trunk"} else={/interface bridge port set [find where bridge="{{ crs310_bridge_name_effective }}" and interface="{{ crs310_ap_interface_effective }}"] pvid={{ crs310_trunk_native_pvid_effective }} ingress-filtering=yes frame-types=admit-all comment="ansible:ap-trunk"}
 
     - name: Ensure access ports exist with per-port PVIDs
       community.routeros.command:
         commands:
           - >-
-            :if ([:len [/interface bridge port find where bridge="{{ crs310_bridge_name_effective }}" and interface="{{ item.key }}"]] = 0) do={/interface bridge port add bridge="{{ crs310_bridge_name_effective }}" interface="{{ item.key }}" pvid={{ item.value }} ingress-filtering=yes frame-types=admit-only-untagged-and-priority-tagged} else={/interface bridge port set [find where bridge="{{ crs310_bridge_name_effective }}" and interface="{{ item.key }}"] pvid={{ item.value }} ingress-filtering=yes frame-types=admit-only-untagged-and-priority-tagged}
+            :if ([:len [/interface bridge port find where bridge="{{ crs310_bridge_name_effective }}" and interface="{{ item.key }}"]] = 0) do={/interface bridge port add bridge="{{ crs310_bridge_name_effective }}" interface="{{ item.key }}" pvid={{ item.value }} ingress-filtering=yes frame-types=admit-only-untagged-and-priority-tagged comment="ansible:access-vlan{{ item.value }}"} else={/interface bridge port set [find where bridge="{{ crs310_bridge_name_effective }}" and interface="{{ item.key }}"] pvid={{ item.value }} ingress-filtering=yes frame-types=admit-only-untagged-and-priority-tagged comment="ansible:access-vlan{{ item.value }}"}
       loop: "{{ crs310_access_port_pvids_effective | dict2items }}"
 
     - name: Configure bridge VLAN table entries (CRS3xx offload-compatible)
       community.routeros.command:
         commands:
           - >-
-            :if ([:len [/interface bridge vlan find where bridge="{{ crs310_bridge_name_effective }}" and vlan-ids={{ item }}]] = 0) do={/interface bridge vlan add bridge="{{ crs310_bridge_name_effective }}" vlan-ids={{ item }}{{ ' tagged=' ~ (crs310_vlan_tagged_ports | join(',')) if (crs310_vlan_tagged_ports | length > 0) else '' }}{{ ' untagged=' ~ (crs310_vlan_untagged_ports | join(',')) if (crs310_vlan_untagged_ports | length > 0) else '' }}} else={/interface bridge vlan set [find where bridge="{{ crs310_bridge_name_effective }}" and vlan-ids={{ item }}]{{ ' tagged=' ~ (crs310_vlan_tagged_ports | join(',')) if (crs310_vlan_tagged_ports | length > 0) else '' }}{{ ' untagged=' ~ (crs310_vlan_untagged_ports | join(',')) if (crs310_vlan_untagged_ports | length > 0) else '' }}}
+            :if ([:len [/interface bridge vlan find where bridge="{{ crs310_bridge_name_effective }}" and vlan-ids={{ item }}]] = 0) do={/interface bridge vlan add bridge="{{ crs310_bridge_name_effective }}" vlan-ids={{ item }}{{ ' tagged=' ~ (crs310_vlan_tagged_ports | join(',')) if (crs310_vlan_tagged_ports | length > 0) else '' }}{{ ' untagged=' ~ (crs310_vlan_untagged_ports | join(',')) if (crs310_vlan_untagged_ports | length > 0) else '' }} comment="ansible:vlan{{ item }}-{{ crs310_vlan_name_map_effective.get(item | string, 'mgmt') }}"} else={/interface bridge vlan set [find where bridge="{{ crs310_bridge_name_effective }}" and vlan-ids={{ item }}]{{ ' tagged=' ~ (crs310_vlan_tagged_ports | join(',')) if (crs310_vlan_tagged_ports | length > 0) else '' }}{{ ' untagged=' ~ (crs310_vlan_untagged_ports | join(',')) if (crs310_vlan_untagged_ports | length > 0) else '' }} comment="ansible:vlan{{ item }}-{{ crs310_vlan_name_map_effective.get(item | string, 'mgmt') }}"}
       loop: "{{ crs310_vlan_ids_effective }}"
       vars:
         crs310_vlan_tagged_ports: "{{ crs310_tagged_by_vlan_effective.get(item, crs310_tagged_by_vlan_effective.get(item | string, [])) }}"
