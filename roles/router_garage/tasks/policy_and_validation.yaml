@@ -22,6 +22,7 @@
     garage_wan_pppoe_password_effective: "{{ garage_wan_pppoe_password | default(vault_garage_wan_pppoe_password | default('')) }}"
     network_vlans_effective: "{{ vlans | default(network.vlans) }}"
     network_forwarding_rules_effective: "{{ forwarding_rules | default(network.forwarding_rules) }}"
+    garage_lan_management_vlan_effective: "{{ garage_lan_management_vlan | default(network.garage.lan_management_vlan | default(garage_lan_management_vlan_default)) }}"
 
 - name: Validate PPPoE credentials are available
   ansible.builtin.assert:

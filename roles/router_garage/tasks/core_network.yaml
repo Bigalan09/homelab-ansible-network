@@ -181,6 +181,62 @@
   when: garage_test_mode_effective | bool
   no_log: true
 
+- name: Configure bridge VLAN filtering and trunk tagging on gateway LAN bridge
+  ansible.builtin.raw: |
+    br_idx=''
+    idx=0
+    while uci -q get network.@device[$idx] >/dev/null 2>&1; do
+      if [ "$(uci -q get network.@device[$idx].name)" = 'br-lan' ]; then
+        br_idx="$idx"
+        break
+      fi
+      idx=$((idx+1))
+    done
+
+    if [ -z "$br_idx" ]; then
+      echo "Unable to locate br-lan device section in UCI network config." >&2
+      exit 12
+    fi
+
+    uci set network.@device[$br_idx].vlan_filtering='1'
+
+    # Remove prior bridge-vlan entries for a clean, idempotent rebuild.
+    idx=0
+    while uci -q get network.@bridge-vlan[$idx] >/dev/null 2>&1; do
+      uci -q delete network.@bridge-vlan[$idx]
+    done
+
+    port_count=0
+    lan_ports=''
+    while uci -q get network.@device[$br_idx].ports[$port_count] >/dev/null 2>&1; do
+      port_name="$(uci -q get network.@device[$br_idx].ports[$port_count])"
+      if [ -n "$port_name" ]; then
+        lan_ports="$lan_ports $port_name"
+      fi
+      port_count=$((port_count+1))
+    done
+
+    if [ -z "$lan_ports" ]; then
+      echo "br-lan has no configured member ports." >&2
+      exit 13
+    fi
+
+    uci add network bridge-vlan >/dev/null
+    uci set network.@bridge-vlan[-1].device='br-lan'
+    uci set network.@bridge-vlan[-1].vlan='{{ garage_lan_management_vlan_effective }}'
+    for port in $lan_ports; do
+      uci add_list network.@bridge-vlan[-1].ports="$port:u*"
+    done
+
+    {% for vlan in network_vlans_effective %}
+    uci add network bridge-vlan >/dev/null
+    uci set network.@bridge-vlan[-1].device='br-lan'
+    uci set network.@bridge-vlan[-1].vlan='{{ vlan.id }}'
+    for port in $lan_ports; do
+      uci add_list network.@bridge-vlan[-1].ports="$port:t"
+    done
+    {% endfor %}
+
 - name: Ensure VLAN interfaces exist
   ansible.builtin.raw: |
     {% for vlan in network_vlans_effective %}
