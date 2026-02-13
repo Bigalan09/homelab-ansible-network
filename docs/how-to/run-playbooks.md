@@ -32,6 +32,8 @@ ansible-playbook -i inventory/hosts.yaml playbooks/gateway-router.yaml
 ansible-playbook -i inventory/hosts.yaml playbooks/ap.yaml
 ```
 
+For VLAN trunk/backhaul expectations between gateway and AP, see `docs/how-to/office-ap-vlan-backhaul.md`.
+
 ## Service-only runs
 
 ```bash
