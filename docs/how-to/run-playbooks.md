@@ -1,5 +1,11 @@
 # How to Run Playbooks
 
+## Install required collections
+
+```bash
+ansible-galaxy collection install -r dependencies/requirements.yaml
+```
+
 ## Vault password file workflow (encrypted)
 
 ```bash
@@ -33,6 +39,16 @@ ansible-playbook -i inventory/hosts.yaml playbooks/ap-repeater.yaml
 ```
 
 For VLAN trunk/backhaul expectations between gateway and AP, see `docs/how-to/gateway-router-ap-repeater-vlan-backhaul.md`.
+
+## MikroTik CRS310 (Router-on-a-Stick using Bridge VLAN Filtering)
+
+Ensure your switch is in the `switches` inventory group and reachable first.
+
+```bash
+ansible-playbook -i inventory/hosts.yaml playbooks/crs310-router-on-stick.yaml
+```
+
+The CRS310 role stages bridge VLAN entries first and enables `vlan-filtering` only at the end. It also installs a temporary timed rollback scheduler before the cutover and removes it after success.
 
 ## Service-only runs
 
