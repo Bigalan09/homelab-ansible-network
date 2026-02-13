@@ -50,3 +50,19 @@
       vault_gateway_router_test_repeater_password in inventory/vault.yaml.
   when: gateway_router_test_mode_effective | bool
 
+- name: Validate management VLAN is not part of routed VLAN list
+  ansible.builtin.assert:
+    that:
+      - >-
+        (
+          network_vlans_effective
+          | map(attribute='id')
+          | map('int')
+          | select('equalto', gateway_router_lan_management_vlan_effective | int)
+          | list
+          | length
+        ) == 0
+    fail_msg: >-
+      network.vlans must not include the management VLAN
+      (gateway_router_lan_management_vlan={{ gateway_router_lan_management_vlan_effective }}).
+      Keep management VLAN untagged-only on br-lan and define only routed/tagged VLANs in network.vlans.

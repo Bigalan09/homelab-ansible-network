@@ -206,15 +206,22 @@
       uci -q delete network.@bridge-vlan[$idx]
     done
 
-    port_count=0
     lan_ports=''
-    while uci -q get network.@device[$br_idx].ports[$port_count] >/dev/null 2>&1; do
-      port_name="$(uci -q get network.@device[$br_idx].ports[$port_count])"
-      if [ -n "$port_name" ]; then
-        lan_ports="$lan_ports $port_name"
+    uci_ports="$(uci -q get network.@device[$br_idx].ports 2>/dev/null | tr '\n' ' ' || true)"
+    if [ -n "$uci_ports" ]; then
+      lan_ports="$uci_ports"
+    fi
+
+    if [ -z "$lan_ports" ]; then
+      runtime_ports="$(bridge link show master br-lan 2>/dev/null | awk -F': ' '/^[0-9]+: / {split($2, a, " "); sub(/@.*/, "", a[1]); if (a[1] != "br-lan") print a[1]}' | tr '\n' ' ')"
+      if [ -n "$runtime_ports" ]; then
+        lan_ports="$runtime_ports"
+        uci -q delete network.@device[$br_idx].ports
+        for port in $lan_ports; do
+          uci add_list network.@device[$br_idx].ports="$port"
+        done
       fi
-      port_count=$((port_count+1))
-    done
+    fi
 
     if [ -z "$lan_ports" ]; then
       echo "br-lan has no configured member ports." >&2
@@ -228,7 +235,7 @@
       uci add_list network.@bridge-vlan[-1].ports="$port:u*"
     done
 
-    {% for vlan in network_vlans_effective %}
+    {% for vlan in network_vlans_effective if (vlan.id | int) != (gateway_router_lan_management_vlan_effective | int) %}
     uci add network bridge-vlan >/dev/null
     uci set network.@bridge-vlan[-1].device='br-lan'
     uci set network.@bridge-vlan[-1].vlan='{{ vlan.id }}'
@@ -239,7 +246,7 @@
 
 - name: Ensure VLAN interfaces exist
   ansible.builtin.raw: |
-    {% for vlan in network_vlans_effective %}
+    {% for vlan in network_vlans_effective if (vlan.id | int) != (gateway_router_lan_management_vlan_effective | int) %}
     uci -q delete network.vlan{{ vlan.id }}
     uci set network.vlan{{ vlan.id }}='interface'
     uci set network.vlan{{ vlan.id }}.proto='static'
@@ -250,7 +257,7 @@
 
 - name: Ensure DHCP pools exist for routed VLANs
   ansible.builtin.raw: |
-    {% for vlan in network_vlans_effective %}
+    {% for vlan in network_vlans_effective if (vlan.id | int) != (gateway_router_lan_management_vlan_effective | int) %}
     uci -q delete dhcp.vlan{{ vlan.id }}
     uci set dhcp.vlan{{ vlan.id }}='dhcp'
     uci set dhcp.vlan{{ vlan.id }}.interface='vlan{{ vlan.id }}'
@@ -261,7 +268,7 @@
 
 - name: Configure firewall zones for VLANs
   ansible.builtin.raw: |
-    {% for vlan in network_vlans_effective %}
+    {% for vlan in network_vlans_effective if (vlan.id | int) != (gateway_router_lan_management_vlan_effective | int) %}
     uci -q delete firewall.{{ vlan.zone }}
     uci set firewall.{{ vlan.zone }}='zone'
     uci set firewall.{{ vlan.zone }}.name='{{ vlan.zone }}'

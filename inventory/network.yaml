@@ -13,7 +13,7 @@ network:
       - radio0
       - radio1
     test_mode:
-      enabled: false
+      enabled: true
       repeater:
         network: wwan
         radio: radio1
