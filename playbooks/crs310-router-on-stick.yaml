@@ -1,0 +1,12 @@
+---
+- name: Configure MikroTik CRS310 router-on-a-stick bridge VLAN filtering
+  hosts: switches
+  connection: network_cli
+  become: false
+  gather_facts: false
+  vars_files:
+    - ../inventory/network.yaml
+  vars:
+    ansible_network_os: community.routeros.routeros
+  roles:
+    - mikrotik_crs310_bridge_vlan
