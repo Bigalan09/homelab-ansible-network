@@ -1,14 +1,14 @@
 - name: Set router hostname and timezone
   ansible.builtin.raw: |
-    uci set system.@system[0].hostname='router-garage'
+    uci set system.@system[0].hostname='gateway-router'
     uci set system.@system[0].zonename='Europe/London'
     uci set system.@system[0].timezone='GMT0BST,M3.5.0/1,M10.5.0'
 
-- name: Rename garage Wi-Fi SSIDs to management label
+- name: Rename gateway-router Wi-Fi SSIDs to management label
   ansible.builtin.raw: |
     idx=0
     while uci -q get wireless.@wifi-iface[$idx] >/dev/null 2>&1; do
-      uci set wireless.@wifi-iface[$idx].ssid='{{ garage_mgmt_ssid_effective }}'
+      uci set wireless.@wifi-iface[$idx].ssid='{{ gateway_router_mgmt_ssid_effective }}'
       idx=$((idx+1))
     done
 
@@ -20,7 +20,7 @@
 - name: Configure WAN VLAN device for PPPoE
   ansible.builtin.raw: |
     current_wan_dev="$(uci -q get network.wan.device || true)"
-    wan_parent='{{ garage_wan_parent_if_effective }}'
+    wan_parent='{{ gateway_router_wan_parent_if_effective }}'
     if [ -z "$wan_parent" ]; then
       if [ -n "$current_wan_dev" ]; then
         case "$current_wan_dev" in
@@ -31,43 +31,43 @@
         wan_parent='eth1'
       fi
     fi
-    wan_vlan_dev="${wan_parent}.{{ garage_wan_vlan_tag_effective }}"
+    wan_vlan_dev="${wan_parent}.{{ gateway_router_wan_vlan_tag_effective }}"
     uci -q delete network.wan_vlan
     uci set network.wan_vlan='device'
     uci set network.wan_vlan.type='8021q'
     uci set network.wan_vlan.ifname="$wan_parent"
-    uci set network.wan_vlan.vid='{{ garage_wan_vlan_tag_effective }}'
+    uci set network.wan_vlan.vid='{{ gateway_router_wan_vlan_tag_effective }}'
     uci set network.wan_vlan.name="$wan_vlan_dev"
     uci set network.wan.device="$wan_vlan_dev"
   when:
-    - garage_wan_proto_effective == "pppoe"
-    - not (garage_test_mode_effective | bool)
+    - gateway_router_wan_proto_effective == "pppoe"
+    - not (gateway_router_test_mode_effective | bool)
 
 - name: Configure WAN PPPoE credentials and behavior
   ansible.builtin.raw: |
     uci set network.wan.proto='pppoe'
-    uci set network.wan.username='{{ garage_wan_pppoe_username_effective }}'
-    uci set network.wan.password='{{ garage_wan_pppoe_password_effective }}'
-    uci set network.wan.mtu='{{ garage_wan_pppoe_mtu_effective }}'
+    uci set network.wan.username='{{ gateway_router_wan_pppoe_username_effective }}'
+    uci set network.wan.password='{{ gateway_router_wan_pppoe_password_effective }}'
+    uci set network.wan.mtu='{{ gateway_router_wan_pppoe_mtu_effective }}'
     uci set network.wan.ipv6='auto'
     uci set network.wan.peerdns='1'
-    {% if garage_wan_pppoe_service_effective | length > 0 %}
-    uci set network.wan.service='{{ garage_wan_pppoe_service_effective }}'
+    {% if gateway_router_wan_pppoe_service_effective | length > 0 %}
+    uci set network.wan.service='{{ gateway_router_wan_pppoe_service_effective }}'
     {% endif %}
   when:
-    - garage_wan_proto_effective == "pppoe"
-    - not (garage_test_mode_effective | bool)
+    - gateway_router_wan_proto_effective == "pppoe"
+    - not (gateway_router_test_mode_effective | bool)
   no_log: true
 
 - name: Configure test-mode repeater uplink (Wi-Fi WAN)
   ansible.builtin.raw: |
-    uci -q delete network.{{ garage_test_repeater_network_effective }}
-    uci set network.{{ garage_test_repeater_network_effective }}='interface'
-    uci set network.{{ garage_test_repeater_network_effective }}.proto='dhcp'
-    uci set network.{{ garage_test_repeater_network_effective }}.peerdns='1'
-    uci set network.{{ garage_test_repeater_network_effective }}.metric='10'
+    uci -q delete network.{{ gateway_router_test_repeater_network_effective }}
+    uci set network.{{ gateway_router_test_repeater_network_effective }}='interface'
+    uci set network.{{ gateway_router_test_repeater_network_effective }}.proto='dhcp'
+    uci set network.{{ gateway_router_test_repeater_network_effective }}.peerdns='1'
+    uci set network.{{ gateway_router_test_repeater_network_effective }}.metric='10'
 
-    ssid={{ garage_test_repeater_ssid_effective | quote }}
+    ssid={{ gateway_router_test_repeater_ssid_effective | quote }}
     wifi_devices="$(uci -q show wireless | sed -n "s/^wireless\\.\\([^.=]*\\)=wifi-device$/\\1/p")"
     dev_2g=''
     dev_5g=''
@@ -95,8 +95,8 @@
       return 1
     }
 
-    selected_radio="$(resolve_radio '{{ garage_test_repeater_radio_effective }}' || true)"
-    for radio in {{ garage_test_repeater_radios_effective | join(' ') }}; do
+    selected_radio="$(resolve_radio '{{ gateway_router_test_repeater_radio_effective }}' || true)"
+    for radio in {{ gateway_router_test_repeater_radios_effective | join(' ') }}; do
       resolved_radio="$(resolve_radio "$radio" || true)"
       [ -n "$resolved_radio" ] || continue
       if iwinfo "$resolved_radio" scan 2>/dev/null | grep -F "ESSID: \"$ssid\"" >/dev/null 2>&1; then
@@ -105,7 +105,7 @@
       fi
     done
     if [ -z "$selected_radio" ] || ! uci -q get wireless."$selected_radio" >/dev/null 2>&1; then
-      for radio in {{ garage_test_repeater_radios_effective | join(' ') }}; do
+      for radio in {{ gateway_router_test_repeater_radios_effective | join(' ') }}; do
         resolved_radio="$(resolve_radio "$radio" || true)"
         if [ -n "$resolved_radio" ] && uci -q get wireless."$resolved_radio" >/dev/null 2>&1; then
           selected_radio="$resolved_radio"
@@ -127,13 +127,13 @@
     uci set wireless.sta='wifi-iface'
     uci set wireless.sta.device="$selected_radio"
     uci set wireless.sta.mode='sta'
-    uci set wireless.sta.network='{{ garage_test_repeater_network_effective }}'
-    uci set wireless.sta.ssid={{ garage_test_repeater_ssid_effective | quote }}
+    uci set wireless.sta.network='{{ gateway_router_test_repeater_network_effective }}'
+    uci set wireless.sta.ssid={{ gateway_router_test_repeater_ssid_effective | quote }}
     scan_encryption=''
     scan_line="$(iwinfo "$selected_radio" scan 2>/dev/null | awk '
       BEGIN { found=0 }
       /ESSID: / {
-        if (index($0, "\"{{ garage_test_repeater_ssid_effective }}\"") > 0) {
+        if (index($0, "\"{{ gateway_router_test_repeater_ssid_effective }}\"") > 0) {
           found=1
         } else {
           found=0
@@ -150,12 +150,12 @@
       scan_encryption='psk2'
     fi
 
-    selected_encryption='{{ garage_test_repeater_encryption_effective }}'
+    selected_encryption='{{ gateway_router_test_repeater_encryption_effective }}'
     if [ -n "$scan_encryption" ]; then
       selected_encryption="$scan_encryption"
     fi
 
-    fallback_encryptions='{{ garage_test_repeater_encryptions_effective | join(" ") }}'
+    fallback_encryptions='{{ gateway_router_test_repeater_encryptions_effective | join(" ") }}'
     if [ -n "$fallback_encryptions" ] && ! printf '%s\n' "$fallback_encryptions" | tr ' ' '\n' | grep -Fx "$selected_encryption" >/dev/null 2>&1; then
       selected_encryption="$(printf '%s\n' "$fallback_encryptions" | awk '{print $1}')"
     fi
@@ -167,18 +167,18 @@
     idx=0
     while uci -q get firewall.@zone[$idx] >/dev/null 2>&1; do
       if [ "$(uci -q get firewall.@zone[$idx].name)" = "wan" ]; then
-        uci -q del_list firewall.@zone[$idx].network='{{ garage_test_repeater_network_effective }}'
-        uci add_list firewall.@zone[$idx].network='{{ garage_test_repeater_network_effective }}'
+        uci -q del_list firewall.@zone[$idx].network='{{ gateway_router_test_repeater_network_effective }}'
+        uci add_list firewall.@zone[$idx].network='{{ gateway_router_test_repeater_network_effective }}'
         break
       fi
       idx=$((idx+1))
     done
-  when: garage_test_mode_effective | bool
+  when: gateway_router_test_mode_effective | bool
 
 - name: Configure test-mode repeater password (secret)
   ansible.builtin.raw: |
-    uci set wireless.sta.key={{ garage_test_repeater_password_effective | quote }}
-  when: garage_test_mode_effective | bool
+    uci set wireless.sta.key={{ gateway_router_test_repeater_password_effective | quote }}
+  when: gateway_router_test_mode_effective | bool
   no_log: true
 
 - name: Configure bridge VLAN filtering and trunk tagging on gateway LAN bridge
@@ -223,7 +223,7 @@
 
     uci add network bridge-vlan >/dev/null
     uci set network.@bridge-vlan[-1].device='br-lan'
-    uci set network.@bridge-vlan[-1].vlan='{{ garage_lan_management_vlan_effective }}'
+    uci set network.@bridge-vlan[-1].vlan='{{ gateway_router_lan_management_vlan_effective }}'
     for port in $lan_ports; do
       uci add_list network.@bridge-vlan[-1].ports="$port:u*"
     done
@@ -319,7 +319,7 @@
     timeout: 90
   delegate_to: localhost
   become: false
-  register: garage_handoff_wait
+  register: gateway_router_handoff_wait
   failed_when: false
   changed_when: false
 
@@ -342,4 +342,4 @@
   delegate_to: localhost
   become: false
   changed_when: false
-  when: garage_test_mode_effective | bool
+  when: gateway_router_test_mode_effective | bool

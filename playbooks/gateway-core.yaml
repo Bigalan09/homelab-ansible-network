@@ -7,4 +7,4 @@
     - ../inventory/network.yaml
     - ../inventory/vault.yaml
   roles:
-    - router_garage
+    - gateway_router

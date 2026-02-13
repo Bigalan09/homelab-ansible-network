@@ -6,16 +6,16 @@ all:
   children:
     routers:
       hosts:
-        router-garage:
+        gateway-router:
           ansible_host: 10.1.0.1
-        router-office:
+        ap-repeater:
           ansible_host: 192.168.8.1
     gateway:
       hosts:
-        router-garage:
+        gateway-router:
     access_points:
       hosts:
-        router-office:
+        ap-repeater:
     openwrt_tailscale_nodes:
       hosts:
         # travel-router:

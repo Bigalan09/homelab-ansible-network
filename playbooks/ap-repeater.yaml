@@ -1,5 +1,5 @@
 ---
-- name: Configure office access point baseline
+- name: Configure AP-repeater baseline
   hosts: access_points
   become: false
   gather_facts: false
@@ -7,4 +7,4 @@
     - ../inventory/network.yaml
     - ../inventory/vault.yaml
   roles:
-    - router_office_ap
+    - ap_repeater

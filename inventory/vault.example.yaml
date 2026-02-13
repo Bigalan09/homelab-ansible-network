@@ -2,15 +2,15 @@
 # Placeholder secrets template.
 # Copy to inventory/vault.yaml, then edit and encrypt with Ansible Vault.
 
-# Gateway WAN (required when network.garage.test_mode.enabled=false)
-vault_garage_wan_pppoe_username: "REPLACE_WITH_ISP_USERNAME"
-vault_garage_wan_pppoe_password: "REPLACE_WITH_ISP_PASSWORD"
+# Gateway WAN (required when network.gateway_router.test_mode.enabled=false)
+vault_gateway_router_wan_pppoe_username: "REPLACE_WITH_ISP_USERNAME"
+vault_gateway_router_wan_pppoe_password: "REPLACE_WITH_ISP_PASSWORD"
 
-# Gateway test-mode repeater uplink (required when network.garage.test_mode.enabled=true)
-vault_garage_test_repeater_ssid: "REPLACE_WITH_UPSTREAM_WIFI_SSID"
-vault_garage_test_repeater_password: "REPLACE_WITH_UPSTREAM_WIFI_PASSWORD"
+# Gateway test-mode repeater uplink (required when network.gateway_router.test_mode.enabled=true)
+vault_gateway_router_test_repeater_ssid: "REPLACE_WITH_UPSTREAM_WIFI_SSID"
+vault_gateway_router_test_repeater_password: "REPLACE_WITH_UPSTREAM_WIFI_PASSWORD"
 
-# Office AP Wi-Fi PSKs
+# AP-repeater Wi-Fi PSKs
 vault_wifi_key_manor: "REPLACE_WITH_MANOR_WIFI_KEY"
 vault_wifi_key_iot: "REPLACE_WITH_IOT_WIFI_KEY"
 vault_wifi_key_guest: "REPLACE_WITH_GUEST_WIFI_KEY"

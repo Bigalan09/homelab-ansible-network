@@ -1,23 +1,23 @@
 ---
-- name: Resolve office AP network settings
+- name: Resolve AP-repeater network settings
   ansible.builtin.set_fact:
-    office_ap_ip_effective: "{{ ap_ip }}"
-    office_ap_netmask_effective: "{{ ap_netmask }}"
-    office_ap_gateway_effective: "{{ ap_gateway }}"
+    ap_repeater_ip_effective: "{{ ap_ip }}"
+    ap_repeater_netmask_effective: "{{ ap_netmask }}"
+    ap_repeater_gateway_effective: "{{ ap_gateway }}"
     network_vlans_effective: "{{ vlans | default(network.vlans) }}"
     network_wifi_country_effective: "{{ wifi_country | default(network.wifi.country) }}"
     network_wifi_channels_effective: "{{ wifi_channels | default(network.wifi.channels | default({})) }}"
-    office_ap_ssids_effective: "{{ ssids | default(network.office_ap.ssids) }}"
-    ap_lan_management_vlan_effective: "{{ ap_lan_management_vlan | default(network.office_ap.lan_management_vlan | default(ap_lan_management_vlan_default)) }}"
+    ap_repeater_ssids_effective: "{{ ssids | default(network.ap_repeater.ssids) }}"
+    ap_lan_management_vlan_effective: "{{ ap_lan_management_vlan | default(network.ap_repeater.lan_management_vlan | default(ap_lan_management_vlan_default)) }}"
 
 - name: Set AP hostname and static management network
   ansible.builtin.raw: |
-    uci set system.@system[0].hostname='router-office'
+    uci set system.@system[0].hostname='ap-repeater'
     uci set network.lan.proto='static'
-    uci set network.lan.ipaddr='{{ office_ap_ip_effective }}'
-    uci set network.lan.netmask='{{ office_ap_netmask_effective }}'
-    uci set network.lan.gateway='{{ office_ap_gateway_effective }}'
-    uci set network.lan.dns='{{ office_ap_gateway_effective }}'
+    uci set network.lan.ipaddr='{{ ap_repeater_ip_effective }}'
+    uci set network.lan.netmask='{{ ap_repeater_netmask_effective }}'
+    uci set network.lan.gateway='{{ ap_repeater_gateway_effective }}'
+    uci set network.lan.dns='{{ ap_repeater_gateway_effective }}'
 
 - name: Disable AP WAN and WAN6 interfaces to prevent same-subnet conflicts
   ansible.builtin.raw: |
@@ -165,7 +165,7 @@
       uci -q show wireless."$1" 2>/dev/null | grep -q "^wireless\\.$1=wifi-device$"
     }
 
-    {% for ssid in office_ap_ssids_effective %}
+    {% for ssid in ap_repeater_ssids_effective %}
     requested_dev='{{ ssid.device }}'
     resolved_dev="$requested_dev"
 

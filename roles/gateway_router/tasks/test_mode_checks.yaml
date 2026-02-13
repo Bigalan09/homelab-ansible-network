@@ -1,13 +1,13 @@
 - name: "Test-mode check: verify repeater uplink internet and tailscale control-plane reachability"
   ansible.builtin.raw: |
-    ifup {{ garage_test_repeater_network_effective }} >/dev/null 2>&1 || true
+    ifup {{ gateway_router_test_repeater_network_effective }} >/dev/null 2>&1 || true
     elapsed=0
     uplink_up=false
-    while [ "$elapsed" -lt "{{ garage_test_uplink_wait_seconds_effective | int }}" ]; do
-      uplink_up="$(ifstatus {{ garage_test_repeater_network_effective }} 2>/dev/null | jsonfilter -e '@.up' 2>/dev/null || echo false)"
+    while [ "$elapsed" -lt "{{ gateway_router_test_uplink_wait_seconds_effective | int }}" ]; do
+      uplink_up="$(ifstatus {{ gateway_router_test_repeater_network_effective }} 2>/dev/null | jsonfilter -e '@.up' 2>/dev/null || echo false)"
       [ "$uplink_up" = "true" ] && break
-      sleep {{ garage_test_uplink_poll_interval_seconds_effective | int }}
-      elapsed=$((elapsed + {{ garage_test_uplink_poll_interval_seconds_effective | int }}))
+      sleep {{ gateway_router_test_uplink_poll_interval_seconds_effective | int }}
+      elapsed=$((elapsed + {{ gateway_router_test_uplink_poll_interval_seconds_effective | int }}))
     done
     [ "$uplink_up" = "true" ] || exit 2
 
@@ -17,7 +17,7 @@
 
     ping -c1 -W3 8.8.8.8 >/dev/null 2>&1 || ping -c1 -W3 1.1.1.1 >/dev/null 2>&1 || exit 3
 
-    {% for host in garage_test_tailscale_hosts_effective %}
+    {% for host in gateway_router_test_tailscale_hosts_effective %}
     if command -v nslookup >/dev/null 2>&1; then
       nslookup {{ host }} >/dev/null 2>&1 || exit 4
     fi
@@ -30,57 +30,57 @@
     fi
     {% endfor %}
     exit 0
-  register: garage_test_tailscale_ping
+  register: gateway_router_test_tailscale_ping
   changed_when: false
   failed_when: false
-  when: garage_test_mode_effective | bool
+  when: gateway_router_test_mode_effective | bool
 
 - name: Show repeater diagnostics when test-mode uplink check fails
   ansible.builtin.raw: |
-    echo "ifstatus {{ garage_test_repeater_network_effective }}:"
-    ifstatus {{ garage_test_repeater_network_effective }} || true
+    echo "ifstatus {{ gateway_router_test_repeater_network_effective }}:"
+    ifstatus {{ gateway_router_test_repeater_network_effective }} || true
     echo
     echo "wireless.sta:"
     uci show wireless.sta || true
     echo
-    for r in {{ garage_test_repeater_radios_effective | join(' ') }}; do
+    for r in {{ gateway_router_test_repeater_radios_effective | join(' ') }}; do
       echo "scan summary for $r:"
       iwinfo "$r" scan 2>/dev/null | grep -E 'ESSID:|Encryption:' | head -n 60 || true
       echo
     done
-  register: garage_test_repeater_diag
+  register: gateway_router_test_repeater_diag
   changed_when: false
   failed_when: false
   when:
-    - garage_test_mode_effective | bool
-    - garage_test_tailscale_ping is defined
-    - garage_test_tailscale_ping.rc != 0
+    - gateway_router_test_mode_effective | bool
+    - gateway_router_test_tailscale_ping is defined
+    - gateway_router_test_tailscale_ping.rc != 0
 
 - name: Print repeater diagnostics summary when test-mode uplink check fails
   ansible.builtin.debug:
-    msg: "{{ garage_test_repeater_diag.stdout | default('no diagnostics captured') }}"
+    msg: "{{ gateway_router_test_repeater_diag.stdout | default('no diagnostics captured') }}"
   when:
-    - garage_test_mode_effective | bool
-    - garage_test_tailscale_ping is defined
-    - garage_test_tailscale_ping.rc != 0
+    - gateway_router_test_mode_effective | bool
+    - gateway_router_test_tailscale_ping is defined
+    - gateway_router_test_tailscale_ping.rc != 0
 
 - name: Fail when repeater test-mode uplink validation fails
   ansible.builtin.fail:
     msg: >-
-      Test mode repeater uplink validation failed (rc={{ garage_test_tailscale_ping.rc }}).
+      Test mode repeater uplink validation failed (rc={{ gateway_router_test_tailscale_ping.rc }}).
       Review diagnostics from the previous task to identify matching radio/encryption.
   when:
-    - garage_test_mode_effective | bool
-    - garage_test_tailscale_ping is defined
-    - garage_test_tailscale_ping.rc != 0
+    - gateway_router_test_mode_effective | bool
+    - gateway_router_test_tailscale_ping is defined
+    - gateway_router_test_tailscale_ping.rc != 0
 
 - name: Test-mode check passed for tailscale control-plane reachability
   ansible.builtin.debug:
     msg: >-
       Test mode uplink can reach tailscale control-plane hosts:
-      {{ garage_test_tailscale_hosts_effective | join(', ') }}.
-      {{ garage_test_tailscale_ping.stdout | default('') }}
+      {{ gateway_router_test_tailscale_hosts_effective | join(', ') }}.
+      {{ gateway_router_test_tailscale_ping.stdout | default('') }}
   when:
-    - garage_test_mode_effective | bool
-    - garage_test_tailscale_ping.rc == 0
+    - gateway_router_test_mode_effective | bool
+    - gateway_router_test_tailscale_ping.rc == 0
 

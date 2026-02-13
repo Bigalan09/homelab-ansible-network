@@ -8,7 +8,7 @@ Without bridge VLAN filtering and per-port tagged membership, VLAN-tagged backha
 
 ## Decision
 
-- `router_garage` and `router_office_ap` roles will explicitly:
+- `gateway_router` and `ap_repeater` roles will explicitly:
   - enable `vlan_filtering` on `br-lan`,
   - rebuild `network.@bridge-vlan` entries idempotently,
   - keep management/native VLAN untagged on bridge member ports,
@@ -23,6 +23,6 @@ Without bridge VLAN filtering and per-port tagged membership, VLAN-tagged backha
 
 ## Related
 
-- `roles/router_garage/tasks/core_network.yaml`
-- `roles/router_office_ap/tasks/main.yaml`
-- `docs/how-to/office-ap-vlan-backhaul.md`
+- `roles/gateway_router/tasks/core_network.yaml`
+- `roles/ap_repeater/tasks/main.yaml`
+- `docs/how-to/gateway-router-ap-repeater-vlan-backhaul.md`

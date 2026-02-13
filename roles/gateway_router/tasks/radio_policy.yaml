@@ -1,7 +1,7 @@
-- name: Verify WAN and internet reachability before disabling garage Wi-Fi
+- name: Verify WAN and internet reachability before disabling gateway-router Wi-Fi
   ansible.builtin.raw: |
-    if [ "{{ garage_test_mode_effective | ternary('true', 'false') }}" = "true" ]; then
-      uplink_up="$(ifstatus {{ garage_test_repeater_network_effective }} 2>/dev/null | jsonfilter -e '@.up' 2>/dev/null || echo false)"
+    if [ "{{ gateway_router_test_mode_effective | ternary('true', 'false') }}" = "true" ]; then
+      uplink_up="$(ifstatus {{ gateway_router_test_repeater_network_effective }} 2>/dev/null | jsonfilter -e '@.up' 2>/dev/null || echo false)"
     else
       uplink_up="$(ifstatus wan 2>/dev/null | jsonfilter -e '@.up' 2>/dev/null || echo false)"
     fi
@@ -9,11 +9,11 @@
       exit 2
     fi
     ping -c1 -W3 8.8.8.8 >/dev/null 2>&1 || ping -c1 -W3 1.1.1.1 >/dev/null 2>&1
-  register: garage_wan_internet_check
+  register: gateway_router_wan_internet_check
   changed_when: false
   failed_when: false
 
-- name: Disable garage 2.4/5 GHz radios after WAN/internet confirmation
+- name: Disable gateway-router 2.4/5 GHz radios after WAN/internet confirmation
   ansible.builtin.raw: |
     wifi_devices="$(uci -q show wireless | sed -n "s/^wireless\\.\\([^.=]*\\)=wifi-device$/\\1/p")"
     dev_2g=''
@@ -41,46 +41,46 @@
       esac
       return 1
     }
-    {% for radio in garage_wifi_radios_to_disable_effective %}
+    {% for radio in gateway_router_wifi_radios_to_disable_effective %}
     resolved_radio="$(resolve_radio '{{ radio }}' || true)"
     if [ -n "$resolved_radio" ]; then
       uci set wireless."$resolved_radio".disabled='1'
     fi
     {% endfor %}
   when:
-    - not (garage_test_mode_effective | bool)
-    - garage_wan_internet_check.rc == 0
-    - garage_wifi_radios_to_disable_effective | length > 0
+    - not (gateway_router_test_mode_effective | bool)
+    - gateway_router_wan_internet_check.rc == 0
+    - gateway_router_wifi_radios_to_disable_effective | length > 0
 
 - name: Commit wireless radio disable changes
   ansible.builtin.raw: |
     uci commit wireless
   when:
-    - not (garage_test_mode_effective | bool)
-    - garage_wan_internet_check.rc == 0
-    - garage_wifi_radios_to_disable_effective | length > 0
+    - not (gateway_router_test_mode_effective | bool)
+    - gateway_router_wan_internet_check.rc == 0
+    - gateway_router_wifi_radios_to_disable_effective | length > 0
 
-- name: Reload Wi-Fi after garage radio disable
+- name: Reload Wi-Fi after gateway-router radio disable
   ansible.builtin.raw: |
     wifi reload >/dev/null 2>&1 || true
   when:
-    - not (garage_test_mode_effective | bool)
-    - garage_wan_internet_check.rc == 0
-    - garage_wifi_radios_to_disable_effective | length > 0
+    - not (gateway_router_test_mode_effective | bool)
+    - gateway_router_wan_internet_check.rc == 0
+    - gateway_router_wifi_radios_to_disable_effective | length > 0
 
-- name: Skip radio disable in garage test mode
+- name: Skip radio disable in gateway-router test mode
   ansible.builtin.debug:
     msg: >-
-      garage_test_mode is enabled; Wi-Fi radios are kept enabled so repeater
+      gateway_router_test_mode is enabled; Wi-Fi radios are kept enabled so repeater
       uplink can provide internet for Tailscale during testing.
-  when: garage_test_mode_effective | bool
+  when: gateway_router_test_mode_effective | bool
 
-- name: Keep garage Wi-Fi enabled when WAN/internet not confirmed
+- name: Keep gateway-router Wi-Fi enabled when WAN/internet not confirmed
   ansible.builtin.debug:
     msg: >-
-      WAN/internet was not confirmed, so garage Wi-Fi radios were left enabled.
+      WAN/internet was not confirmed, so gateway-router Wi-Fi radios were left enabled.
       Check ifstatus wan and upstream PPPoE link, then rerun to disable radios.
   when:
-    - not (garage_test_mode_effective | bool)
-    - garage_wan_internet_check.rc != 0
-    - garage_wifi_radios_to_disable_effective | length > 0
+    - not (gateway_router_test_mode_effective | bool)
+    - gateway_router_wan_internet_check.rc != 0
+    - gateway_router_wifi_radios_to_disable_effective | length > 0
