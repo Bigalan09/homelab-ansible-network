@@ -9,11 +9,12 @@ network:
 
   gateway_router:
     mgmt_ssid: homelab_gateway_router_mngmt
+    lan_management_vlan: 99
     radios_to_disable:
       - radio0
       - radio1
     test_mode:
-      enabled: true
+      enabled: false
       repeater:
         network: wwan
         radio: radio1
@@ -53,15 +54,20 @@ network:
       name: iot
       ip: 10.30.0.1
       zone: iot_zone
-    - id: 99
+    - id: 40
       name: guest
-      ip: 10.99.0.1
+      ip: 10.40.0.1
       zone: guest_zone
+    - id: 50
+      name: tv_vpn
+      ip: 10.50.0.1
+      zone: tv_zone
 
   ap_repeater:
+    lan_management_vlan: 99
     ssids:
-      - name: manor_5g
-        ssid: Meerkat Manor
+      - name: trusted_5g
+        ssid: Meerkat Trusted
         vlan_id: 20
         key: "{{ vault_wifi_key_manor }}"
         device: radio1
@@ -74,33 +80,82 @@ network:
         encryption: psk2
       - name: guest_2g
         ssid: Meerkat Guest
-        vlan_id: 99
+        vlan_id: 40
         key: "{{ vault_wifi_key_guest }}"
         device: radio0
         encryption: psk-mixed
         isolate: '1'
       - name: guest_5g
         ssid: Meerkat Guest
-        vlan_id: 99
+        vlan_id: 40
         key: "{{ vault_wifi_key_guest }}"
         device: radio1
         encryption: psk-mixed
         isolate: '1'
+      - name: tv_vpn_5g
+        ssid: Meerkat TV
+        vlan_id: 50
+        key: "{{ vault_wifi_key_tv | default(vault_wifi_key_guest) }}"
+        device: radio1
+        encryption: psk-mixed
 
 
   mikrotik_crs310:
     bridge_name: bridge
     uplink_interface: ether1
     ap_interface: ether2
-    access_interfaces:
-      - ether3
-      - ether4
-      - ether5
-      - ether6
-      - ether7
-      - ether8
-    mgmt_ip_cidr: 192.168.99.2/24
-    mgmt_gateway: 192.168.99.1
+    trunk_native_pvid: 99
+    access_port_pvids:
+      ether3: 20
+      ether4: 10
+      ether5: 10
+      ether6: 30
+      ether7: 30
+      ether8: 30
+      sfp-sfpplus1: 10
+      sfp-sfpplus2: 20
+    vlan_ids:
+      - 10
+      - 20
+      - 30
+      - 40
+      - 50
+      - 99
+    tagged_by_vlan:
+      10:
+        - ether1
+      20:
+        - ether1
+        - ether2
+      30:
+        - ether1
+        - ether2
+      40:
+        - ether1
+        - ether2
+      50:
+        - ether1
+        - ether2
+      99:
+        - bridge
+    untagged_by_vlan:
+      10:
+        - ether4
+        - ether5
+        - sfp-sfpplus1
+      20:
+        - ether3
+        - sfp-sfpplus2
+      30:
+        - ether6
+        - ether7
+        - ether8
+      99:
+        - ether1
+        - ether2
+    mgmt_vlan_id: 99
+    mgmt_ip_cidr: 10.1.0.2/24
+    mgmt_gateway: 10.1.0.1
     rollback_delay_minutes: 10
 
   forwarding_rules:
@@ -113,6 +168,8 @@ network:
     - src: iot_zone
       dest: wan
     - src: guest_zone
+      dest: wan
+    - src: tv_zone
       dest: wan
 
 services:
@@ -183,5 +240,9 @@ services:
         connection_name: surfshark_london
       - name: guest_to_london
         vlan_zone: guest_zone
-        subnet: 10.99.0.0/24
+        subnet: 10.40.0.0/24
         connection_name: surfshark_london
+      - name: tv_to_amsterdam
+        vlan_zone: tv_zone
+        subnet: 10.50.0.0/24
+        connection_name: surfshark_amsterdam

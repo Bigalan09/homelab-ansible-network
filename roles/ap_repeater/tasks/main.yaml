@@ -4,11 +4,11 @@
     ap_repeater_ip_effective: "{{ ap_ip }}"
     ap_repeater_netmask_effective: "{{ ap_netmask }}"
     ap_repeater_gateway_effective: "{{ ap_gateway }}"
-    network_vlans_effective: "{{ vlans | default(network.vlans) }}"
     network_wifi_country_effective: "{{ wifi_country | default(network.wifi.country) }}"
     network_wifi_channels_effective: "{{ wifi_channels | default(network.wifi.channels | default({})) }}"
     ap_repeater_ssids_effective: "{{ ssids | default(network.ap_repeater.ssids) }}"
     ap_lan_management_vlan_effective: "{{ ap_lan_management_vlan | default(network.ap_repeater.lan_management_vlan | default(ap_lan_management_vlan_default)) }}"
+    ap_backhaul_vlan_ids_effective: "{{ (ssids | default(network.ap_repeater.ssids)) | map(attribute='vlan_id') | map('int') | unique | sort }}"
 
 - name: Set AP hostname and static management network
   ansible.builtin.raw: |
@@ -98,10 +98,10 @@
       uci add_list network.@bridge-vlan[-1].ports="$port:u*"
     done
 
-    {% for vlan in network_vlans_effective if (vlan.id | int) != (ap_lan_management_vlan_effective | int) %}
+    {% for vlan_id in ap_backhaul_vlan_ids_effective if (vlan_id | int) != (ap_lan_management_vlan_effective | int) %}
     uci add network bridge-vlan >/dev/null
     uci set network.@bridge-vlan[-1].device='br-lan'
-    uci set network.@bridge-vlan[-1].vlan='{{ vlan.id }}'
+    uci set network.@bridge-vlan[-1].vlan='{{ vlan_id }}'
     for port in $lan_ports; do
       uci add_list network.@bridge-vlan[-1].ports="$port:t"
     done
@@ -109,11 +109,11 @@
 
 - name: Build VLAN bridge interfaces for AP SSID backhaul
   ansible.builtin.raw: |
-    {% for vlan in network_vlans_effective if (vlan.id | int) != (ap_lan_management_vlan_effective | int) %}
-    uci -q delete network.ap_vlan{{ vlan.id }}
-    uci set network.ap_vlan{{ vlan.id }}='interface'
-    uci set network.ap_vlan{{ vlan.id }}.proto='none'
-    uci set network.ap_vlan{{ vlan.id }}.device='br-lan.{{ vlan.id }}'
+    {% for vlan_id in ap_backhaul_vlan_ids_effective if (vlan_id | int) != (ap_lan_management_vlan_effective | int) %}
+    uci -q delete network.ap_vlan{{ vlan_id }}
+    uci set network.ap_vlan{{ vlan_id }}='interface'
+    uci set network.ap_vlan{{ vlan_id }}.proto='none'
+    uci set network.ap_vlan{{ vlan_id }}.device='br-lan.{{ vlan_id }}'
     {% endfor %}
 
 - name: Configure country code and reset wifi-iface sections

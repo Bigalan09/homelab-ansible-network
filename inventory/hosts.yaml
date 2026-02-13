@@ -25,5 +25,4 @@ all:
     switches:
       hosts:
         # crs310-switch:
-        #   ansible_host: 192.168.99.2
-
+        #   ansible_host: 10.1.0.2

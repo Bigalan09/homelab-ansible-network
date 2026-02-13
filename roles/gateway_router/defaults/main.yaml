@@ -27,4 +27,4 @@ gateway_router_test_uplink_poll_interval_seconds_default: 5
 gateway_router_wan_proto_default: "pppoe"
 gateway_router_wan_pppoe_mtu_default: "1492"
 gateway_router_wan_vlan_tag_default: "911"
-gateway_router_lan_management_vlan_default: 1
+gateway_router_lan_management_vlan_default: 99

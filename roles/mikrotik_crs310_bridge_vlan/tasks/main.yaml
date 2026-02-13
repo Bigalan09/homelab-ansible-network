@@ -1,80 +1,114 @@
 ---
+- name: Resolve CRS310 topology settings
+  ansible.builtin.set_fact:
+    crs310_inventory_settings: "{{ (network | default({})).get('mikrotik_crs310', {}) }}"
+
+- name: Build effective CRS310 variables
+  ansible.builtin.set_fact:
+    crs310_bridge_name_effective: "{{ crs310_inventory_settings.get('bridge_name', crs310_bridge_name) }}"
+    crs310_uplink_interface_effective: "{{ crs310_inventory_settings.get('uplink_interface', crs310_uplink_interface) }}"
+    crs310_ap_interface_effective: "{{ crs310_inventory_settings.get('ap_interface', crs310_ap_interface) }}"
+    crs310_trunk_native_pvid_effective: "{{ crs310_inventory_settings.get('trunk_native_pvid', crs310_trunk_native_pvid) }}"
+    crs310_access_port_pvids_effective: "{{ crs310_inventory_settings.get('access_port_pvids', crs310_access_port_pvids) }}"
+    crs310_vlan_ids_effective: "{{ crs310_inventory_settings.get('vlan_ids', crs310_vlan_ids) }}"
+    crs310_tagged_by_vlan_effective: "{{ crs310_inventory_settings.get('tagged_by_vlan', crs310_tagged_by_vlan) }}"
+    crs310_untagged_by_vlan_effective: "{{ crs310_inventory_settings.get('untagged_by_vlan', crs310_untagged_by_vlan) }}"
+    crs310_mgmt_vlan_id_effective: "{{ crs310_inventory_settings.get('mgmt_vlan_id', crs310_mgmt_vlan_id) }}"
+    crs310_mgmt_vlan_interface_effective: "{{ crs310_inventory_settings.get('mgmt_vlan_interface', crs310_mgmt_vlan_interface) }}"
+    crs310_mgmt_ip_cidr_effective: "{{ crs310_inventory_settings.get('mgmt_ip_cidr', crs310_mgmt_ip_cidr) }}"
+    crs310_mgmt_gateway_effective: "{{ crs310_inventory_settings.get('mgmt_gateway', crs310_mgmt_gateway) }}"
+    crs310_rollback_delay_minutes_effective: "{{ crs310_inventory_settings.get('rollback_delay_minutes', crs310_rollback_delay_minutes) }}"
+    crs310_rollback_scheduler_name_effective: "{{ crs310_inventory_settings.get('rollback_scheduler_name', crs310_rollback_scheduler_name) }}"
+    crs310_rollback_script_name_effective: "{{ crs310_inventory_settings.get('rollback_script_name', crs310_rollback_script_name) }}"
+
+- name: Validate CRS310 access port map is not empty
+  ansible.builtin.assert:
+    that:
+      - crs310_access_port_pvids_effective is mapping
+      - crs310_access_port_pvids_effective | length > 0
+    fail_msg: >-
+      CRS310 access port mapping is empty. Define network.mikrotik_crs310.access_port_pvids
+      in inventory/network.yaml.
+
 - name: Calculate rollback trigger time (UTC on control node)
   ansible.builtin.set_fact:
-    crs310_rollback_start_time: "{{ lookup('pipe', 'date -u -d \"+' ~ (crs310_rollback_delay_minutes | int | string) ~ ' minutes\" +%H:%M:%S') }}"
+    crs310_rollback_start_time: "{{ lookup('pipe', 'date -u -d \"+' ~ (crs310_rollback_delay_minutes_effective | int | string) ~ ' minutes\" +%H:%M:%S') }}"
 
 - name: Configure CRS3xx bridge VLAN filtering topology with timed rollback safety
   block:
     - name: Install rollback script and scheduler guard before VLAN filtering changes
       community.routeros.command:
         commands:
-          - /system script remove [find where name="{{ crs310_rollback_script_name }}"]
-          - /system scheduler remove [find where name="{{ crs310_rollback_scheduler_name }}"]
+          - /system script remove [find where name="{{ crs310_rollback_script_name_effective }}"]
+          - /system scheduler remove [find where name="{{ crs310_rollback_scheduler_name_effective }}"]
           - >-
-            /system script add name="{{ crs310_rollback_script_name }}" source="/interface bridge set [find where name=\"{{ crs310_bridge_name }}\"] vlan-filtering=no; /system scheduler remove [find where name=\"{{ crs310_rollback_scheduler_name }}\"]; /system script remove [find where name=\"{{ crs310_rollback_script_name }}\"]"
+            /system script add name="{{ crs310_rollback_script_name_effective }}" source="/interface bridge set [find where name=\"{{ crs310_bridge_name_effective }}\"] vlan-filtering=no; /system scheduler remove [find where name=\"{{ crs310_rollback_scheduler_name_effective }}\"]; /system script remove [find where name=\"{{ crs310_rollback_script_name_effective }}\"]"
           - >-
-            /system scheduler add name="{{ crs310_rollback_scheduler_name }}" start-time="{{ crs310_rollback_start_time }}" interval=0s on-event="/system script run {{ crs310_rollback_script_name }}"
+            /system scheduler add name="{{ crs310_rollback_scheduler_name_effective }}" start-time="{{ crs310_rollback_start_time }}" interval=0s on-event="/system script run {{ crs310_rollback_script_name_effective }}"
 
     - name: Ensure bridge exists with vlan-filtering disabled (safe staging)
       community.routeros.command:
         commands:
           - >-
-            :if ([:len [/interface bridge find where name="{{ crs310_bridge_name }}"]] = 0) do={/interface bridge add name="{{ crs310_bridge_name }}" vlan-filtering=no}
-          - /interface bridge set [find where name="{{ crs310_bridge_name }}"] vlan-filtering=no
+            :if ([:len [/interface bridge find where name="{{ crs310_bridge_name_effective }}"]] = 0) do={/interface bridge add name="{{ crs310_bridge_name_effective }}" vlan-filtering=no}
+          - /interface bridge set [find where name="{{ crs310_bridge_name_effective }}"] vlan-filtering=no
 
-    - name: Ensure bridge ports exist with required PVIDs
+    - name: Ensure trunk ports exist with management-native PVID
       community.routeros.command:
         commands:
           - >-
-            :if ([:len [/interface bridge port find where bridge="{{ crs310_bridge_name }}" and interface="{{ crs310_uplink_interface }}"]] = 0) do={/interface bridge port add bridge="{{ crs310_bridge_name }}" interface="{{ crs310_uplink_interface }}" pvid={{ crs310_uplink_pvid }} ingress-filtering=yes frame-types=admit-only-vlan-tagged} else={/interface bridge port set [find where bridge="{{ crs310_bridge_name }}" and interface="{{ crs310_uplink_interface }}"] pvid={{ crs310_uplink_pvid }} ingress-filtering=yes frame-types=admit-only-vlan-tagged}
+            :if ([:len [/interface bridge port find where bridge="{{ crs310_bridge_name_effective }}" and interface="{{ crs310_uplink_interface_effective }}"]] = 0) do={/interface bridge port add bridge="{{ crs310_bridge_name_effective }}" interface="{{ crs310_uplink_interface_effective }}" pvid={{ crs310_trunk_native_pvid_effective }} ingress-filtering=yes frame-types=admit-all} else={/interface bridge port set [find where bridge="{{ crs310_bridge_name_effective }}" and interface="{{ crs310_uplink_interface_effective }}"] pvid={{ crs310_trunk_native_pvid_effective }} ingress-filtering=yes frame-types=admit-all}
           - >-
-            :if ([:len [/interface bridge port find where bridge="{{ crs310_bridge_name }}" and interface="{{ crs310_ap_interface }}"]] = 0) do={/interface bridge port add bridge="{{ crs310_bridge_name }}" interface="{{ crs310_ap_interface }}" pvid={{ crs310_ap_management_pvid }} ingress-filtering=yes frame-types=admit-all} else={/interface bridge port set [find where bridge="{{ crs310_bridge_name }}" and interface="{{ crs310_ap_interface }}"] pvid={{ crs310_ap_management_pvid }} ingress-filtering=yes frame-types=admit-all}
+            :if ([:len [/interface bridge port find where bridge="{{ crs310_bridge_name_effective }}" and interface="{{ crs310_ap_interface_effective }}"]] = 0) do={/interface bridge port add bridge="{{ crs310_bridge_name_effective }}" interface="{{ crs310_ap_interface_effective }}" pvid={{ crs310_trunk_native_pvid_effective }} ingress-filtering=yes frame-types=admit-all} else={/interface bridge port set [find where bridge="{{ crs310_bridge_name_effective }}" and interface="{{ crs310_ap_interface_effective }}"] pvid={{ crs310_trunk_native_pvid_effective }} ingress-filtering=yes frame-types=admit-all}
 
-    - name: Ensure trusted access ports exist with PVID 10
+    - name: Ensure access ports exist with per-port PVIDs
       community.routeros.command:
         commands:
           - >-
-            :if ([:len [/interface bridge port find where bridge="{{ crs310_bridge_name }}" and interface="{{ item }}"]] = 0) do={/interface bridge port add bridge="{{ crs310_bridge_name }}" interface="{{ item }}" pvid={{ crs310_trusted_access_pvid }} ingress-filtering=yes frame-types=admit-only-untagged-and-priority-tagged} else={/interface bridge port set [find where bridge="{{ crs310_bridge_name }}" and interface="{{ item }}"] pvid={{ crs310_trusted_access_pvid }} ingress-filtering=yes frame-types=admit-only-untagged-and-priority-tagged}
-      loop: "{{ crs310_access_interfaces }}"
+            :if ([:len [/interface bridge port find where bridge="{{ crs310_bridge_name_effective }}" and interface="{{ item.key }}"]] = 0) do={/interface bridge port add bridge="{{ crs310_bridge_name_effective }}" interface="{{ item.key }}" pvid={{ item.value }} ingress-filtering=yes frame-types=admit-only-untagged-and-priority-tagged} else={/interface bridge port set [find where bridge="{{ crs310_bridge_name_effective }}" and interface="{{ item.key }}"] pvid={{ item.value }} ingress-filtering=yes frame-types=admit-only-untagged-and-priority-tagged}
+      loop: "{{ crs310_access_port_pvids_effective | dict2items }}"
 
     - name: Configure bridge VLAN table entries (CRS3xx offload-compatible)
       community.routeros.command:
         commands:
           - >-
-            :if ([:len [/interface bridge vlan find where bridge="{{ crs310_bridge_name }}" and vlan-ids={{ item }}]] = 0) do={/interface bridge vlan add bridge="{{ crs310_bridge_name }}" vlan-ids={{ item }} tagged={{ crs310_tagged_by_vlan[item] | join(',') }}} else={/interface bridge vlan set [find where bridge="{{ crs310_bridge_name }}" and vlan-ids={{ item }}] tagged={{ crs310_tagged_by_vlan[item] | join(',') }}}
-      loop: "{{ crs310_vlan_ids }}"
+            :if ([:len [/interface bridge vlan find where bridge="{{ crs310_bridge_name_effective }}" and vlan-ids={{ item }}]] = 0) do={/interface bridge vlan add bridge="{{ crs310_bridge_name_effective }}" vlan-ids={{ item }}{{ ' tagged=' ~ (crs310_vlan_tagged_ports | join(',')) if (crs310_vlan_tagged_ports | length > 0) else '' }}{{ ' untagged=' ~ (crs310_vlan_untagged_ports | join(',')) if (crs310_vlan_untagged_ports | length > 0) else '' }}} else={/interface bridge vlan set [find where bridge="{{ crs310_bridge_name_effective }}" and vlan-ids={{ item }}]{{ ' tagged=' ~ (crs310_vlan_tagged_ports | join(',')) if (crs310_vlan_tagged_ports | length > 0) else '' }}{{ ' untagged=' ~ (crs310_vlan_untagged_ports | join(',')) if (crs310_vlan_untagged_ports | length > 0) else '' }}}
+      loop: "{{ crs310_vlan_ids_effective }}"
+      vars:
+        crs310_vlan_tagged_ports: "{{ crs310_tagged_by_vlan_effective.get(item, crs310_tagged_by_vlan_effective.get(item | string, [])) }}"
+        crs310_vlan_untagged_ports: "{{ crs310_untagged_by_vlan_effective.get(item, crs310_untagged_by_vlan_effective.get(item | string, [])) }}"
 
     - name: Ensure management VLAN interface exists on bridge
       community.routeros.command:
         commands:
           - >-
-            :if ([:len [/interface vlan find where name="{{ crs310_mgmt_vlan_interface }}"]] = 0) do={/interface vlan add name="{{ crs310_mgmt_vlan_interface }}" interface="{{ crs310_bridge_name }}" vlan-id={{ crs310_mgmt_vlan_id }}} else={/interface vlan set [find where name="{{ crs310_mgmt_vlan_interface }}"] interface="{{ crs310_bridge_name }}" vlan-id={{ crs310_mgmt_vlan_id }}}
+            :if ([:len [/interface vlan find where name="{{ crs310_mgmt_vlan_interface_effective }}"]] = 0) do={/interface vlan add name="{{ crs310_mgmt_vlan_interface_effective }}" interface="{{ crs310_bridge_name_effective }}" vlan-id={{ crs310_mgmt_vlan_id_effective }}} else={/interface vlan set [find where name="{{ crs310_mgmt_vlan_interface_effective }}"] interface="{{ crs310_bridge_name_effective }}" vlan-id={{ crs310_mgmt_vlan_id_effective }}}
 
     - name: Ensure management IP is assigned to VLAN interface
       community.routeros.command:
         commands:
           - >-
-            :if ([:len [/ip address find where interface="{{ crs310_mgmt_vlan_interface }}"]] = 0) do={/ip address add address="{{ crs310_mgmt_ip_cidr }}" interface="{{ crs310_mgmt_vlan_interface }}"} else={/ip address set [find where interface="{{ crs310_mgmt_vlan_interface }}"] address="{{ crs310_mgmt_ip_cidr }}" interface="{{ crs310_mgmt_vlan_interface }}"}
+            :if ([:len [/ip address find where interface="{{ crs310_mgmt_vlan_interface_effective }}"]] = 0) do={/ip address add address="{{ crs310_mgmt_ip_cidr_effective }}" interface="{{ crs310_mgmt_vlan_interface_effective }}"} else={/ip address set [find where interface="{{ crs310_mgmt_vlan_interface_effective }}"] address="{{ crs310_mgmt_ip_cidr_effective }}" interface="{{ crs310_mgmt_vlan_interface_effective }}"}
 
     - name: Ensure default route is present for management reachability
       community.routeros.command:
         commands:
           - >-
-            :if ([:len [/ip route find where dst-address="0.0.0.0/0"]] = 0) do={/ip route add dst-address=0.0.0.0/0 gateway="{{ crs310_mgmt_gateway }}"} else={/ip route set [find where dst-address="0.0.0.0/0"] gateway="{{ crs310_mgmt_gateway }}"}
+            :if ([:len [/ip route find where dst-address="0.0.0.0/0"]] = 0) do={/ip route add dst-address=0.0.0.0/0 gateway="{{ crs310_mgmt_gateway_effective }}"} else={/ip route set [find where dst-address="0.0.0.0/0"] gateway="{{ crs310_mgmt_gateway_effective }}"}
 
     - name: Enable bridge VLAN filtering as the final configuration step
       community.routeros.command:
         commands:
-          - /interface bridge set [find where name="{{ crs310_bridge_name }}"] vlan-filtering=yes
+          - /interface bridge set [find where name="{{ crs310_bridge_name_effective }}"] vlan-filtering=yes
 
     - name: Remove rollback scheduler and script after successful completion
       community.routeros.command:
         commands:
-          - /system scheduler remove [find where name="{{ crs310_rollback_scheduler_name }}"]
-          - /system script remove [find where name="{{ crs310_rollback_script_name }}"]
+          - /system scheduler remove [find where name="{{ crs310_rollback_scheduler_name_effective }}"]
+          - /system script remove [find where name="{{ crs310_rollback_script_name_effective }}"]
 
   rescue:
-    - name: Keep/trigger safe fallback if an Ansible task fails before completion
+    - name: Keep or trigger safe fallback if an Ansible task fails before completion
       community.routeros.command:
         commands:
-          - /interface bridge set [find where name="{{ crs310_bridge_name }}"] vlan-filtering=no
+          - /interface bridge set [find where name="{{ crs310_bridge_name_effective }}"] vlan-filtering=no

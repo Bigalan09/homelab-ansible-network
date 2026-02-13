@@ -39,6 +39,7 @@ ansible-playbook -i inventory/hosts.yaml playbooks/ap-repeater.yaml
 ```
 
 For VLAN trunk/backhaul expectations between gateway and AP, see `docs/how-to/gateway-router-ap-repeater-vlan-backhaul.md`.
+For the full garage/office physical topology and port map, see `docs/how-to/garage-office-topology.md`.
 
 ## MikroTik CRS310 (Router-on-a-Stick using Bridge VLAN Filtering)
 

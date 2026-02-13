@@ -32,6 +32,7 @@ This repository already models the required VLAN + SSID mapping in `inventory/ne
 
 - VLAN IDs/subnets under `network.vlans`.
 - SSID-to-VLAN binding under `network.ap_repeater.ssids` (`vlan_id` per SSID).
+- Current topology intent: AP trunk carries VLAN 20/30/40/50 for SSIDs and uses management VLAN 99 as native/untagged; VLAN 10 is server-only and not broadcast on AP SSIDs.
 
 Management IPs should remain in the management subnet (example):
 

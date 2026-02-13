@@ -3,17 +3,16 @@
 crs310_bridge_name: bridge
 crs310_uplink_interface: ether1
 crs310_ap_interface: ether2
-crs310_access_interfaces:
-  - ether3
-  - ether4
-  - ether5
-  - ether6
-  - ether7
-  - ether8
-
-crs310_trusted_access_pvid: 10
-crs310_ap_management_pvid: 99
-crs310_uplink_pvid: 1
+crs310_trunk_native_pvid: 99
+crs310_access_port_pvids:
+  ether3: 20
+  ether4: 10
+  ether5: 10
+  ether6: 30
+  ether7: 30
+  ether8: 30
+  sfp-sfpplus1: 10
+  sfp-sfpplus2: 20
 
 crs310_vlan_ids:
   - 10
@@ -26,7 +25,6 @@ crs310_vlan_ids:
 crs310_tagged_by_vlan:
   10:
     - "{{ crs310_uplink_interface }}"
-    - "{{ crs310_ap_interface }}"
   20:
     - "{{ crs310_uplink_interface }}"
     - "{{ crs310_ap_interface }}"
@@ -41,13 +39,27 @@ crs310_tagged_by_vlan:
     - "{{ crs310_ap_interface }}"
   99:
     - "{{ crs310_bridge_name }}"
+
+crs310_untagged_by_vlan:
+  10:
+    - ether4
+    - ether5
+    - sfp-sfpplus1
+  20:
+    - ether3
+    - sfp-sfpplus2
+  30:
+    - ether6
+    - ether7
+    - ether8
+  99:
     - "{{ crs310_uplink_interface }}"
     - "{{ crs310_ap_interface }}"
 
 crs310_mgmt_vlan_id: 99
 crs310_mgmt_vlan_interface: vlan99-mgmt
-crs310_mgmt_ip_cidr: 192.168.99.2/24
-crs310_mgmt_gateway: 192.168.99.1
+crs310_mgmt_ip_cidr: 10.1.0.2/24
+crs310_mgmt_gateway: 10.1.0.1
 
 # Timed rollback: if the run fails to complete, RouterOS executes rollback script.
 crs310_rollback_scheduler_name: ansible_crs310_rollback
