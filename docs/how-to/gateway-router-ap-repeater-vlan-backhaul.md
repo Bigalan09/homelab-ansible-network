@@ -1,11 +1,11 @@
-# How to Backhaul VLANs to the Office AP
+# How to Backhaul VLANs to the AP-repeater
 
-Use this guide when `router-garage` (GL.iNet Flint 2) routes VLANs and `router-office` (GL.iNet Beryl) broadcasts per-VLAN SSIDs.
+Use this guide when `gateway-router` (GL.iNet Flint 2) routes VLANs and `ap-repeater` (GL.iNet Beryl) broadcasts per-VLAN SSIDs.
 
 ## Goal
 
 - Gateway does routing, DHCP, and firewall for VLANs.
-- Office AP bridges each SSID to its VLAN.
+- AP-repeater bridges each SSID to its VLAN.
 - AP acts as bridge/AP only (no NAT, no DHCP).
 - DHCP should remain disabled on the AP; gateway DHCP serves each VLAN subnet.
 
@@ -31,12 +31,12 @@ Use a LAN bridge uplink if your firmware supports it cleanly. In this repository
 This repository already models the required VLAN + SSID mapping in `inventory/network.yaml`:
 
 - VLAN IDs/subnets under `network.vlans`.
-- SSID-to-VLAN binding under `network.office_ap.ssids` (`vlan_id` per SSID).
+- SSID-to-VLAN binding under `network.ap_repeater.ssids` (`vlan_id` per SSID).
 
 Management IPs should remain in the management subnet (example):
 
 - Gateway: `10.1.0.1`
-- Office AP: `10.1.0.4`
+- AP-repeater: `10.1.0.4`
 
 ## Apply configuration
 
@@ -49,7 +49,7 @@ ansible-playbook -i inventory/hosts.yaml playbooks/gateway-core.yaml -e ansible_
 2. Configure AP:
 
 ```bash
-ansible-playbook -i inventory/hosts.yaml playbooks/ap.yaml
+ansible-playbook -i inventory/hosts.yaml playbooks/ap-repeater.yaml
 ```
 
 ## Notes on automation in this repository
@@ -59,7 +59,7 @@ ansible-playbook -i inventory/hosts.yaml playbooks/ap.yaml
 
 ## Validate
 
-On AP (`router-office`), verify SSIDs map to VLAN bridge interfaces:
+On AP (`ap-repeater`), verify SSIDs map to VLAN bridge interfaces:
 
 ```sh
 uci show wireless | sed -n '/=wifi-iface/p'
@@ -67,7 +67,7 @@ uci show network | sed -n '/ap_vlan/p'
 bridge vlan show
 ```
 
-On gateway (`router-garage`), verify VLAN interfaces and DHCP pools:
+On gateway (`gateway-router`), verify VLAN interfaces and DHCP pools:
 
 ```sh
 uci show network | sed -n '/vlan[0-9]\+=interface/p'

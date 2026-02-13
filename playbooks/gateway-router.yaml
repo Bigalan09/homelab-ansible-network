@@ -7,7 +7,7 @@
     - ../inventory/network.yaml
     - ../inventory/vault.yaml
   roles:
-    - router_garage
+    - gateway_router
     - tailscale_openwrt
     - adguard_home_openwrt
     - wireguard_policy_openwrt

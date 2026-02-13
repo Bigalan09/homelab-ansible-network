@@ -29,10 +29,10 @@ ansible-playbook -i inventory/hosts.yaml playbooks/gateway-router.yaml
 ## Access point
 
 ```bash
-ansible-playbook -i inventory/hosts.yaml playbooks/ap.yaml
+ansible-playbook -i inventory/hosts.yaml playbooks/ap-repeater.yaml
 ```
 
-For VLAN trunk/backhaul expectations between gateway and AP, see `docs/how-to/office-ap-vlan-backhaul.md`.
+For VLAN trunk/backhaul expectations between gateway and AP, see `docs/how-to/gateway-router-ap-repeater-vlan-backhaul.md`.
 
 ## Service-only runs
 

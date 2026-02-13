@@ -1,0 +1,30 @@
+---
+# Default variables for the gateway_router role.
+lan_ip: "10.1.0.1"
+lan_netmask: "255.255.255.0"
+gateway_router_mgmt_ssid_default: "homelab_gateway_router_mngmt"
+gateway_router_wifi_radios_to_disable_default:
+  - radio0
+  - radio1
+gateway_router_test_mode_default: false
+gateway_router_test_repeater_network_default: "wwan"
+gateway_router_test_repeater_radio_default: "radio1"
+gateway_router_test_repeater_encryption_default: "sae"
+gateway_router_test_repeater_radios_default:
+  - "radio1"
+  - "radio0"
+  - "radio2"
+gateway_router_test_repeater_encryptions_default:
+  - "sae"
+  - "sae-mixed"
+  - "psk2"
+  - "psk-mixed"
+gateway_router_test_tailscale_hosts_default:
+  - "login.tailscale.com"
+  - "api.tailscale.com"
+gateway_router_test_uplink_wait_seconds_default: 90
+gateway_router_test_uplink_poll_interval_seconds_default: 5
+gateway_router_wan_proto_default: "pppoe"
+gateway_router_wan_pppoe_mtu_default: "1492"
+gateway_router_wan_vlan_tag_default: "911"
+gateway_router_lan_management_vlan_default: 1

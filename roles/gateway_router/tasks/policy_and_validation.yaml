@@ -1,0 +1,52 @@
+- name: Resolve gateway-router Wi-Fi policy
+  ansible.builtin.set_fact:
+    gateway_router_mgmt_ssid_effective: "{{ gateway_router_mgmt_ssid | default(network.gateway_router.mgmt_ssid | default(gateway_router_mgmt_ssid_default)) }}"
+    gateway_router_wifi_radios_to_disable_effective: "{{ gateway_router_wifi_radios_to_disable | default(network.gateway_router.radios_to_disable | default(gateway_router_wifi_radios_to_disable_default)) }}"
+    gateway_router_test_mode_effective: "{{ gateway_router_test_mode | default(network.gateway_router.test_mode.enabled | default(gateway_router_test_mode_default)) }}"
+    gateway_router_test_repeater_network_effective: "{{ gateway_router_test_repeater_network | default(network.gateway_router.test_mode.repeater.network | default(gateway_router_test_repeater_network_default)) }}"
+    gateway_router_test_repeater_radio_effective: "{{ gateway_router_test_repeater_radio | default(network.gateway_router.test_mode.repeater.radio | default(gateway_router_test_repeater_radio_default)) }}"
+    gateway_router_test_repeater_encryption_effective: "{{ gateway_router_test_repeater_encryption | default(network.gateway_router.test_mode.repeater.encryption | default(gateway_router_test_repeater_encryption_default)) }}"
+    gateway_router_test_repeater_radios_effective: "{{ gateway_router_test_repeater_radios | default(network.gateway_router.test_mode.repeater.radios | default(gateway_router_test_repeater_radios_default)) }}"
+    gateway_router_test_repeater_encryptions_effective: "{{ gateway_router_test_repeater_encryptions | default(network.gateway_router.test_mode.repeater.encryptions | default(gateway_router_test_repeater_encryptions_default)) }}"
+    gateway_router_test_tailscale_hosts_effective: "{{ gateway_router_test_tailscale_hosts | default(network.gateway_router.test_mode.tailscale_hosts | default(gateway_router_test_tailscale_hosts_default)) }}"
+    gateway_router_test_uplink_wait_seconds_effective: "{{ gateway_router_test_uplink_wait_seconds | default(network.gateway_router.test_mode.uplink_wait_seconds | default(gateway_router_test_uplink_wait_seconds_default)) }}"
+    gateway_router_test_uplink_poll_interval_seconds_effective: "{{ gateway_router_test_uplink_poll_interval_seconds | default(network.gateway_router.test_mode.uplink_poll_interval_seconds | default(gateway_router_test_uplink_poll_interval_seconds_default)) }}"
+    gateway_router_test_repeater_ssid_effective: "{{ gateway_router_test_repeater_ssid | default(vault_gateway_router_test_repeater_ssid | default('')) }}"
+    gateway_router_test_repeater_password_effective: "{{ gateway_router_test_repeater_password | default(vault_gateway_router_test_repeater_password | default('')) }}"
+    gateway_router_wan_proto_effective: "{{ gateway_router_wan_proto | default(network.gateway_router.wan.proto | default(gateway_router_wan_proto_default)) }}"
+    gateway_router_wan_pppoe_mtu_effective: "{{ gateway_router_wan_pppoe_mtu | default(network.gateway_router.wan.pppoe.mtu | default(gateway_router_wan_pppoe_mtu_default)) }}"
+    gateway_router_wan_vlan_tag_effective: "{{ gateway_router_wan_vlan_tag | default(network.gateway_router.wan.pppoe.vlan_tag | default(gateway_router_wan_vlan_tag_default)) }}"
+    gateway_router_wan_parent_if_effective: "{{ gateway_router_wan_parent_if | default(network.gateway_router.wan.pppoe.parent_if | default('')) }}"
+    gateway_router_wan_pppoe_service_effective: "{{ gateway_router_wan_pppoe_service | default(network.gateway_router.wan.pppoe.service | default('')) }}"
+    gateway_router_wan_pppoe_username_effective: "{{ gateway_router_wan_pppoe_username | default(vault_gateway_router_wan_pppoe_username | default('')) }}"
+    gateway_router_wan_pppoe_password_effective: "{{ gateway_router_wan_pppoe_password | default(vault_gateway_router_wan_pppoe_password | default('')) }}"
+    network_vlans_effective: "{{ vlans | default(network.vlans) }}"
+    network_forwarding_rules_effective: "{{ forwarding_rules | default(network.forwarding_rules) }}"
+    gateway_router_lan_management_vlan_effective: "{{ gateway_router_lan_management_vlan | default(network.gateway_router.lan_management_vlan | default(gateway_router_lan_management_vlan_default)) }}"
+
+- name: Validate PPPoE credentials are available
+  ansible.builtin.assert:
+    that:
+      - gateway_router_wan_pppoe_username_effective | length > 0
+      - gateway_router_wan_pppoe_password_effective | length > 0
+      - gateway_router_wan_vlan_tag_effective | length > 0
+    fail_msg: >-
+      gateway_router_wan_proto is pppoe but PPPoE requirements are missing.
+      Set vault_gateway_router_wan_pppoe_username and
+      vault_gateway_router_wan_pppoe_password in inventory/vault.yaml,
+      and set network.gateway_router.wan.pppoe.vlan_tag (e.g. 911) in inventory/network.yaml.
+  when:
+    - gateway_router_wan_proto_effective == "pppoe"
+    - not (gateway_router_test_mode_effective | bool)
+
+- name: Validate test-mode repeater credentials are available
+  ansible.builtin.assert:
+    that:
+      - gateway_router_test_repeater_ssid_effective | length > 0
+      - gateway_router_test_repeater_password_effective | length > 0
+    fail_msg: >-
+      gateway_router_test_mode is enabled but repeater credentials are missing.
+      Set vault_gateway_router_test_repeater_ssid and
+      vault_gateway_router_test_repeater_password in inventory/vault.yaml.
+  when: gateway_router_test_mode_effective | bool
+
