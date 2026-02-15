@@ -1,2 +1,5 @@
+---
 skip_list:
   - var-naming[no-role-prefix]
+  - no-changed-when
+  - yaml

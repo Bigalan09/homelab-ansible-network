@@ -1,0 +1,19 @@
+---
+extends: default
+
+rules:
+  line-length: disable
+  document-start: disable
+  comments-indentation: disable
+  truthy: disable
+  braces:
+    max-spaces-inside: 1
+  comments:
+    min-spaces-from-content: 1
+  octal-values:
+    forbid-implicit-octal: true
+    forbid-explicit-octal: true
+  empty-lines:
+    max: 2
+    max-start: 0
+    max-end: 1

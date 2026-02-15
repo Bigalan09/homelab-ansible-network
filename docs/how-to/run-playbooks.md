@@ -66,3 +66,17 @@ Add hosts under `openwrt_tailscale_nodes` in `inventory/hosts.yaml`, then run:
 ```bash
 ansible-playbook -i inventory/hosts.yaml playbooks/tailscale-nodes.yaml
 ```
+
+## Local quality checks (recommended before PRs)
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install ansible ansible-lint yamllint pre-commit
+ansible-galaxy collection install -r dependencies/requirements.yaml
+cp inventory/vault.example.yaml inventory/vault.yaml
+pre-commit install
+pre-commit run --all-files
+```
+
+These checks mirror CI quality gates (lint, inventory load, and playbook syntax checks).

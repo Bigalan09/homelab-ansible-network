@@ -21,4 +21,5 @@ ansible-playbook -i inventory/hosts.yaml playbooks/ap-repeater.yaml
 - `docs/how-to/run-playbooks.md`
 - `docs/how-to/gateway-router-ap-repeater-vlan-backhaul.md`
 - `docs/how-to/garage-office-topology.md`
+- `docs/how-to/repo-survey-and-quality-gates.md`
 - `adr/README.md`
