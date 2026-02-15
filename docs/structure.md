@@ -3,6 +3,12 @@
 ```text
 .
 ├── ansible.cfg
+├── .ansible-lint.yaml
+├── .pre-commit-config.yaml
+├── .yamllint
+├── .github/
+│   └── workflows/
+│       └── quality-gates.yaml
 ├── AGENTS.md
 ├── adr/
 ├── dependencies/

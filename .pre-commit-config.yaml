@@ -1,0 +1,31 @@
+---
+repos:
+  - repo: local
+    hooks:
+      - id: ansible-lint
+        name: ansible-lint
+        entry: bash -c 'ANSIBLE_VAULT_PASSWORD_FILE=scripts/vault-pass-ci.sh ansible-lint'
+        language: system
+        pass_filenames: false
+
+      - id: yamllint
+        name: yamllint
+        entry: yamllint .
+        language: system
+        pass_filenames: false
+
+      - id: ansible-inventory-load
+        name: ansible inventory loads
+        entry: bash -c 'ANSIBLE_VAULT_PASSWORD_FILE=scripts/vault-pass-ci.sh ansible-inventory -i inventory/hosts.yaml --list > /dev/null'
+        language: system
+        pass_filenames: false
+
+      - id: ansible-playbook-syntax-check
+        name: ansible playbook syntax checks
+        entry: >-
+          bash -c 'cp -f inventory/vault.example.yaml inventory/vault.yaml
+          && for playbook in playbooks/*.yaml; do
+          ANSIBLE_VAULT_PASSWORD_FILE=scripts/vault-pass-ci.sh ansible-playbook -i inventory/hosts.yaml --syntax-check "$playbook";
+          done'
+        language: system
+        pass_filenames: false
