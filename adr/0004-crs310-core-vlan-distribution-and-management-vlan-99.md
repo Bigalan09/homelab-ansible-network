@@ -16,6 +16,7 @@ The target topology requires:
 - Keep routing/DHCP/firewall/VPN policy on `gateway-router`.
 - Use CRS310 as the L2 VLAN distribution core.
 - Standardize management VLAN on `99` for gateway/AP trunk native VLAN behavior.
+  *(Superseded by ADR 0005: VLAN 99 is now tagged on trunks with no native VLAN.)*
 - Update `mikrotik_crs310_bridge_vlan` role to:
   - resolve settings from `network.mikrotik_crs310`,
   - configure trunk native PVID for uplink/AP ports,

@@ -11,7 +11,8 @@ Without bridge VLAN filtering and per-port tagged membership, VLAN-tagged backha
 - `gateway_router` and `ap_repeater` roles will explicitly:
   - enable `vlan_filtering` on `br-lan`,
   - rebuild `network.@bridge-vlan` entries idempotently,
-  - keep management/native VLAN untagged on bridge member ports,
+  - keep management/native VLAN untagged on the dedicated management access port,
+    tagged on all other bridge member ports (see ADR 0005),
   - mark configured VLANs as tagged on bridge member ports.
 - DHCP remains centralized on the gateway; AP remains bridge-only.
 

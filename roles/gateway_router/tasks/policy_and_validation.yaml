@@ -26,6 +26,8 @@
     network_vlans_effective: "{{ vlans | default(network.vlans) }}"
     network_forwarding_rules_effective: "{{ forwarding_rules | default(network.forwarding_rules) }}"
     gateway_router_lan_management_vlan_effective: "{{ gateway_router_lan_management_vlan | default(network.gateway_router.lan_management_vlan | default(gateway_router_lan_management_vlan_default)) }}"
+    gateway_router_mgmt_access_port_effective: "{{ gateway_router_mgmt_access_port | default(network.gateway_router.mgmt_access_port | default(gateway_router_mgmt_access_port_default)) }}"
+    gateway_router_ssids_effective: "{{ gateway_router_ssids | default(network.gateway_router.ssids | default([])) }}"
 
 - name: Validate PPPoE credentials are available
   ansible.builtin.assert:
@@ -53,7 +55,7 @@
       vault_gateway_router_test_repeater_password in inventory/vault.yaml.
   when: gateway_router_test_mode_effective | bool
 
-- name: Validate management VLAN is not part of routed VLAN list
+- name: Validate management VLAN is defined in routed VLAN list
   ansible.builtin.assert:
     that:
       - >-
@@ -64,8 +66,9 @@
           | select('equalto', gateway_router_lan_management_vlan_effective | int)
           | list
           | length
-        ) == 0
+        ) == 1
     fail_msg: >-
-      network.vlans must not include the management VLAN
+      network.vlans must include the management VLAN
       (gateway_router_lan_management_vlan={{ gateway_router_lan_management_vlan_effective }}).
-      Keep management VLAN untagged-only on br-lan and define only routed/tagged VLANs in network.vlans.
+      Add an entry for VLAN {{ gateway_router_lan_management_vlan_effective }} to network.vlans
+      with its IP, name and zone.

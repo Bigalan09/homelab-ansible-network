@@ -32,12 +32,12 @@ This repository already models the required VLAN + SSID mapping in `inventory/ne
 
 - VLAN IDs/subnets under `network.vlans`.
 - SSID-to-VLAN binding under `network.ap_repeater.ssids` (`vlan_id` per SSID).
-- Current topology intent: AP trunk carries VLAN 20/30/40/50 for SSIDs and uses management VLAN 99 as native/untagged; VLAN 10 is server-only and not broadcast on AP SSIDs.
+- Current topology intent: AP trunk carries VLAN 20/30/40/50/99 as tagged and uses no native VLAN; VLAN 10 is server-only and not broadcast on AP SSIDs.
 
 Management IPs should remain in the management subnet (example):
 
-- Gateway: `10.1.0.1`
-- AP-repeater: `10.1.0.4`
+- Gateway: `10.99.0.1`
+- AP-repeater: `10.99.0.3`
 
 ## Apply configuration
 
@@ -86,10 +86,10 @@ Client checks:
 Use a short family prefix plus network label:
 
 - AP trusted VLAN (20): `Meerkat Manor`
-- AP IoT VLAN (30): `Meerkat IoT`
-- AP guest VLAN (40): `Meerkat Guest`
-- AP TV VLAN (50): `Meerkat TV`
-- Gateway management SSID: `Gateway Mgmt`
+- AP IoT VLAN (30): `MM_IOT`
+- AP guest VLAN (40): `Meerkat Manor Guest`
+- AP TV VLAN (50): `MM_TV`
+- Gateway management SSID: `MM_MGMT`
 
 These are defined in `inventory/network.yaml` and can be adjusted per environment.
 
