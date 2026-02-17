@@ -272,6 +272,17 @@
 
     mgmt_access_port='{{ gateway_router_mgmt_access_port_effective }}'
 
+    mgmt_port_found=0
+    for port in $lan_ports; do
+      if [ "$port" = "$mgmt_access_port" ]; then
+        mgmt_port_found=1
+        break
+      fi
+    done
+    if [ "$mgmt_port_found" -eq 0 ]; then
+      echo "WARNING: mgmt_access_port '$mgmt_access_port' not found in br-lan ports ($lan_ports)." >&2
+    fi
+
     uci add network bridge-vlan >/dev/null
     uci set network.@bridge-vlan[-1].device='br-lan'
     uci set network.@bridge-vlan[-1].vlan='{{ gateway_router_lan_management_vlan_effective }}'
