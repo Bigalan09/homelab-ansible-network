@@ -79,3 +79,22 @@ Client checks:
 
 - Connect each SSID and confirm gateway-issued IP in expected subnet.
 - Confirm guest SSID clients get guest subnet addresses and cannot initiate access to trusted/server VLANs.
+
+
+## SSID naming convention
+
+Use a short family prefix plus network label:
+
+- AP trusted VLAN (20): `Meerkat Manor`
+- AP IoT VLAN (30): `Meerkat IoT`
+- AP guest VLAN (40): `Meerkat Guest`
+- AP TV VLAN (50): `Meerkat TV`
+- Gateway management SSID: `Gateway Mgmt`
+
+These are defined in `inventory/network.yaml` and can be adjusted per environment.
+
+## Gateway management Wi-Fi password and side-switch toggle
+
+- Management Wi-Fi password is sourced from `vault_gateway_router_mgmt_password` in `inventory/vault.yaml` (template provided in `inventory/vault.example.yaml`).
+- On Flint hardware, side-switch hooks are installed at `/etc/rc.button/BTN_2`, `/etc/rc.button/switch`, and `/etc/rc.button/sw1` to toggle management SSID radios on button press.
+- The toggle works in both test mode and production mode because it directly flips `wireless.@wifi-iface[*].disabled` for the management SSID.
