@@ -6,9 +6,6 @@
 ├── .ansible-lint.yaml
 ├── .pre-commit-config.yaml
 ├── .yamllint
-├── .github/
-│   └── workflows/
-│       └── quality-gates.yaml
 ├── AGENTS.md
 ├── adr/
 ├── dependencies/
@@ -20,8 +17,7 @@
 ├── inventory/
 │   ├── hosts.yaml
 │   ├── network.yaml
-│   ├── vault.example.yaml
-│   └── vault-pass.enc
+│   └── vault.example.yaml
 ├── playbooks/
 │   ├── gateway-core.yaml
 │   ├── gateway-router.yaml
@@ -32,6 +28,7 @@
 │   ├── wireguard-policy.yaml
 │   └── crs310-router-on-stick.yaml
 ├── roles/
+│   ├── AGENTS.md
 │   ├── gateway_router/
 │   ├── ap_repeater/
 │   ├── tailscale_openwrt/
@@ -39,6 +36,7 @@
 │   ├── wireguard_policy_openwrt/
 │   └── mikrotik_crs310_bridge_vlan/
 └── scripts/
+    ├── vault-pass-ci.sh
     ├── vault-pass-encrypt.sh
     └── vault-pass-decrypt.sh
 ```

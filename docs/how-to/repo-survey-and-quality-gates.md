@@ -30,9 +30,9 @@
    - This is appropriate for no-Python targets, but parsing and idempotency are harder to guarantee.
    - Risk: difficult-to-detect partial apply on unstable links.
 
-5. **Switch target is commented out by default**
-   - The `switches` group currently has no active host entry.
-   - Risk: playbook checks may pass without validating CRS310 syntax against a real inventory target.
+5. **Repository structure documentation drifted from the live tree**
+   - `docs/structure.md` referenced files/directories not present in the repository and missed active helper scripts.
+   - Risk: operator confusion during onboarding and troubleshooting.
 
 ### Consistent local development setup
 
@@ -54,17 +54,17 @@ Use this baseline for repeatable local validation:
 
 ## Short issue list (GitHub issue text)
 
-### P0: Add mandatory PR quality gates for lint + inventory load + syntax checks
+### P0: Add GitHub Actions parity for existing local quality gates
 
 **Problem**
-PRs can merge without machine-verified linting and syntax checks, which increases misconfiguration risk for remote network changes.
+Local quality gates exist via pre-commit, but CI parity is not yet present in this repository.
 
 **Proposal**
-Add GitHub Actions and pre-commit hooks for `ansible-lint`, `yamllint`, `ansible-inventory --list`, and syntax-check of every playbook.
+Add GitHub Actions to mirror local checks: `ansible-lint`, `yamllint`, `ansible-inventory --list`, and syntax-check of every playbook.
 
 **Done when**
-- Checks run on every pull request.
-- Same checks are runnable locally with pre-commit.
+- Checks run on every pull request in GitHub Actions.
+- Same checks remain runnable locally with pre-commit.
 
 ---
 
