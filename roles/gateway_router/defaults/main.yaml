@@ -1,8 +1,8 @@
 ---
 # Default variables for the gateway_router role.
-lan_ip: "10.1.0.1"
+lan_ip: "10.99.0.1"
 lan_netmask: "255.255.255.0"
-gateway_router_mgmt_ssid_default: "homelab_gateway_router_mngmt"
+gateway_router_mgmt_ssid_default: "MM_MGMT"
 gateway_router_mgmt_encryption_default: "sae-mixed"
 gateway_router_mgmt_switch_button_names_default:
   - "BTN_2"
@@ -33,3 +33,4 @@ gateway_router_wan_proto_default: "pppoe"
 gateway_router_wan_pppoe_mtu_default: "1492"
 gateway_router_wan_vlan_tag_default: "911"
 gateway_router_lan_management_vlan_default: 99
+gateway_router_mgmt_access_port_default: "lan4"

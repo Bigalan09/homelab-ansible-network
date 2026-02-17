@@ -18,6 +18,8 @@ vault_gateway_router_mgmt_password: "REPLACE_WITH_GATEWAY_MGMT_WIFI_PASSWORD"
 vault_wifi_key_manor: "REPLACE_WITH_MANOR_WIFI_KEY"
 vault_wifi_key_iot: "REPLACE_WITH_IOT_WIFI_KEY"
 vault_wifi_key_guest: "REPLACE_WITH_GUEST_WIFI_KEY"
+vault_wifi_key_tv: "REPLACE_WITH_TV_WIFI_KEY"
+vault_wifi_key_srv: "REPLACE_WITH_SRV_WIFI_KEY"
 
 # Tailscale auth
 # Option A: auth key

@@ -7,9 +7,9 @@ all:
     routers:
       hosts:
         gateway-router:
-          ansible_host: 10.1.0.1
+          ansible_host: 10.99.0.1
         ap-repeater:
-          ansible_host: 192.168.8.1
+          ansible_host: 10.99.0.3
     gateway:
       hosts:
         gateway-router:
@@ -24,5 +24,5 @@ all:
         #   ansible_host: 10.1.0.51
     switches:
       hosts:
-        # crs310-switch:
-        #   ansible_host: 10.1.0.2
+        crs310-switch:
+          ansible_host: 10.99.0.2

@@ -270,11 +270,17 @@
       exit 13
     fi
 
+    mgmt_access_port='{{ gateway_router_mgmt_access_port_effective }}'
+
     uci add network bridge-vlan >/dev/null
     uci set network.@bridge-vlan[-1].device='br-lan'
     uci set network.@bridge-vlan[-1].vlan='{{ gateway_router_lan_management_vlan_effective }}'
     for port in $lan_ports; do
-      uci add_list network.@bridge-vlan[-1].ports="$port:u*"
+      if [ "$port" = "$mgmt_access_port" ]; then
+        uci add_list network.@bridge-vlan[-1].ports="$port:u*"
+      else
+        uci add_list network.@bridge-vlan[-1].ports="$port:t"
+      fi
     done
 
     {% for vlan in network_vlans_effective if (vlan.id | int) != (gateway_router_lan_management_vlan_effective | int) %}
@@ -288,7 +294,7 @@
 
 - name: Ensure VLAN interfaces exist
   ansible.builtin.raw: |
-    {% for vlan in network_vlans_effective if (vlan.id | int) != (gateway_router_lan_management_vlan_effective | int) %}
+    {% for vlan in network_vlans_effective %}
     uci -q delete network.vlan{{ vlan.id }}
     uci set network.vlan{{ vlan.id }}='interface'
     uci set network.vlan{{ vlan.id }}.proto='static'
@@ -299,7 +305,7 @@
 
 - name: Ensure DHCP pools exist for routed VLANs
   ansible.builtin.raw: |
-    {% for vlan in network_vlans_effective if (vlan.id | int) != (gateway_router_lan_management_vlan_effective | int) %}
+    {% for vlan in network_vlans_effective %}
     uci -q delete dhcp.vlan{{ vlan.id }}
     uci set dhcp.vlan{{ vlan.id }}='dhcp'
     uci set dhcp.vlan{{ vlan.id }}.interface='vlan{{ vlan.id }}'
@@ -310,14 +316,14 @@
 
 - name: Configure firewall zones for VLANs
   ansible.builtin.raw: |
-    {% for vlan in network_vlans_effective if (vlan.id | int) != (gateway_router_lan_management_vlan_effective | int) %}
+    {% for vlan in network_vlans_effective %}
     uci -q delete firewall.{{ vlan.zone }}
     uci set firewall.{{ vlan.zone }}='zone'
     uci set firewall.{{ vlan.zone }}.name='{{ vlan.zone }}'
     uci set firewall.{{ vlan.zone }}.network='vlan{{ vlan.id }}'
-    uci set firewall.{{ vlan.zone }}.input='{{ 'ACCEPT' if vlan.name in ['servers', 'trusted'] else 'REJECT' }}'
+    uci set firewall.{{ vlan.zone }}.input='{{ 'ACCEPT' if vlan.name in ['servers', 'trusted', 'management'] else 'REJECT' }}'
     uci set firewall.{{ vlan.zone }}.output='ACCEPT'
-    uci set firewall.{{ vlan.zone }}.forward='{{ 'ACCEPT' if vlan.name == 'servers' else 'REJECT' }}'
+    uci set firewall.{{ vlan.zone }}.forward='{{ 'ACCEPT' if vlan.name in ['servers', 'management'] else 'REJECT' }}'
     {% endfor %}
 
 - name: Configure inter-zone forwarding rules from vars
@@ -342,6 +348,51 @@
     uci set firewall.trusted_to_servers_mgmt.proto='tcp'
     uci set firewall.trusted_to_servers_mgmt.dest_port='22 80 443'
     uci set firewall.trusted_to_servers_mgmt.target='ACCEPT'
+
+- name: Create gateway router VLAN SSID mappings
+  ansible.builtin.raw: |
+    wifi_devices="$(uci -q show wireless | sed -n "s/^wireless\\.\\([^.=]*\\)=wifi-device$/\\1/p")"
+    first_dev="$(printf '%s\n' "$wifi_devices" | sed -n '1p')"
+    second_dev="$(printf '%s\n' "$wifi_devices" | sed -n '2p')"
+    dev_2g=''
+    dev_5g=''
+    dev_6g=''
+    for dev in $wifi_devices; do
+      band="$(uci -q get wireless."$dev".band || true)"
+      case "$band" in
+        2g) [ -z "$dev_2g" ] && dev_2g="$dev" ;;
+        5g) [ -z "$dev_5g" ] && dev_5g="$dev" ;;
+        6g) [ -z "$dev_6g" ] && dev_6g="$dev" ;;
+      esac
+    done
+    is_wifi_device() {
+      [ -n "${1:-}" ] || return 1
+      uci -q show wireless."$1" 2>/dev/null | grep -q "^wireless\\.$1=wifi-device$"
+    }
+    {% for ssid in gateway_router_ssids_effective %}
+    requested_dev='{{ ssid.device }}'
+    resolved_dev="$requested_dev"
+    if ! is_wifi_device "$resolved_dev"; then
+      case "$requested_dev" in
+        radio0) resolved_dev="${dev_2g:-$first_dev}" ;;
+        radio1) resolved_dev="${dev_5g:-$second_dev}" ;;
+        radio2) resolved_dev="$dev_6g" ;;
+      esac
+    fi
+    if is_wifi_device "$resolved_dev"; then
+      uci -q delete wireless.gw_{{ ssid.name }}
+      uci set wireless.gw_{{ ssid.name }}='wifi-iface'
+      uci set wireless.gw_{{ ssid.name }}.device="$resolved_dev"
+      uci set wireless.gw_{{ ssid.name }}.mode='ap'
+      uci set wireless.gw_{{ ssid.name }}.network='vlan{{ ssid.vlan_id }}'
+      uci set wireless.gw_{{ ssid.name }}.ssid='{{ ssid.ssid }}'
+      uci set wireless.gw_{{ ssid.name }}.encryption='{{ ssid.encryption }}'
+      uci set wireless.gw_{{ ssid.name }}.key='{{ ssid.key }}'
+      uci set wireless.gw_{{ ssid.name }}.disabled='0'
+    fi
+    {% endfor %}
+  when: gateway_router_ssids_effective | length > 0
+  no_log: true
 
 - name: Commit core UCI changes
   ansible.builtin.raw: |

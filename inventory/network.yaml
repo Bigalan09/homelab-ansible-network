@@ -8,16 +8,28 @@ network:
       "5g": "36"
 
   gateway_router:
-    mgmt_ssid: Gateway Mgmt
+    mgmt_ssid: MM_MGMT
     mgmt_encryption: sae-mixed
     mgmt_switch_button_names:
       - BTN_2
       - switch
       - sw1
     lan_management_vlan: 99
-    radios_to_disable:
-      - radio0
-      - radio1
+    mgmt_access_port: lan4
+    ssids:
+      - name: tv_vpn_5g
+        ssid: MM_TV
+        vlan_id: 50
+        key: "{{ vault_wifi_key_tv | default(vault_wifi_key_guest) }}"
+        device: radio1
+        encryption: psk-mixed
+      - name: server_2g
+        ssid: MM_SRV
+        vlan_id: 10
+        key: "{{ vault_wifi_key_srv | default(vault_wifi_key_guest) }}"
+        device: radio0
+        encryption: psk2
+    radios_to_disable: []
     test_mode:
       enabled: false
       repeater:
@@ -67,6 +79,10 @@ network:
       name: tv_vpn
       ip: 10.50.0.1
       zone: tv_zone
+    - id: 99
+      name: management
+      ip: 10.99.0.1
+      zone: mgmt_zone
 
   ap_repeater:
     lan_management_vlan: 99
@@ -78,27 +94,27 @@ network:
         device: radio1
         encryption: sae
       - name: iot_2g
-        ssid: Meerkat IoT
+        ssid: MM_IOT
         vlan_id: 30
         key: "{{ vault_wifi_key_iot }}"
         device: radio0
         encryption: psk2
       - name: guest_2g
-        ssid: Meerkat Guest
+        ssid: Meerkat Manor Guest
         vlan_id: 40
         key: "{{ vault_wifi_key_guest }}"
         device: radio0
         encryption: psk-mixed
         isolate: '1'
       - name: guest_5g
-        ssid: Meerkat Guest
+        ssid: Meerkat Manor Guest
         vlan_id: 40
         key: "{{ vault_wifi_key_guest }}"
         device: radio1
         encryption: psk-mixed
         isolate: '1'
       - name: tv_vpn_5g
-        ssid: Meerkat TV
+        ssid: MM_TV
         vlan_id: 50
         key: "{{ vault_wifi_key_tv | default(vault_wifi_key_guest) }}"
         device: radio1
@@ -109,9 +125,9 @@ network:
     bridge_name: bridge
     uplink_interface: ether1
     ap_interface: ether2
-    trunk_native_pvid: 99
+    trunk_native_pvid: 1
     access_port_pvids:
-      ether3: 20
+      ether3: 10
       ether4: 10
       ether5: 10
       ether6: 30
@@ -143,29 +159,32 @@ network:
         - ether2
       99:
         - bridge
+        - ether1
+        - ether2
     untagged_by_vlan:
       10:
+        - ether3
         - ether4
         - ether5
         - sfp-sfpplus1
       20:
-        - ether3
         - sfp-sfpplus2
       30:
         - ether6
         - ether7
         - ether8
-      99:
-        - ether1
-        - ether2
     mgmt_vlan_id: 99
-    mgmt_ip_cidr: 10.1.0.2/24
-    mgmt_gateway: 10.1.0.1
+    mgmt_ip_cidr: 10.99.0.2/24
+    mgmt_gateway: 10.99.0.1
     rollback_delay_minutes: 10
 
   forwarding_rules:
     - src: trusted_zone
       dest: server_zone
+    - src: trusted_zone
+      dest: iot_zone
+    - src: trusted_zone
+      dest: tv_zone
     - src: trusted_zone
       dest: wan
     - src: server_zone
@@ -175,6 +194,18 @@ network:
     - src: guest_zone
       dest: wan
     - src: tv_zone
+      dest: wan
+    - src: mgmt_zone
+      dest: server_zone
+    - src: mgmt_zone
+      dest: trusted_zone
+    - src: mgmt_zone
+      dest: iot_zone
+    - src: mgmt_zone
+      dest: guest_zone
+    - src: mgmt_zone
+      dest: tv_zone
+    - src: mgmt_zone
       dest: wan
 
 services:
